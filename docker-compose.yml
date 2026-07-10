@@ -1,0 +1,28 @@
+services:
+  metrics:
+    build:
+      context: .
+      args:
+        # Match the GID of the host's docker socket group so the container can read it.
+        # Find it with: stat -c '%g' /var/run/docker.sock
+        DOCKER_GID: ${DOCKER_GID:-988}
+    image: strangewill/track:latest
+    ports:
+      - "5020:5020"
+    volumes:
+      # Read-only access to the local engine, and a persistent volume for the SQLite history.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - track-data:/app/data
+    environment:
+      ConnectionStrings__Default: "Data Source=/app/data/track.db"
+      Track__PollIntervalSeconds: "15"
+      Track__DiskPollIntervalSeconds: "300"
+      Track__RetentionDays: "14"
+      # Persist auth-cookie signing keys on the data volume so logins survive restarts.
+      Track__DataProtectionKeysPath: "/app/data/keys"
+      # Change this before deploying.
+      Track__AdminPassword: "admin"
+    restart: unless-stopped
+
+volumes:
+  track-data:

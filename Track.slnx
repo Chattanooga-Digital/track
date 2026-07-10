@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Track.Tests/Track.Tests.csproj" />
+  <Project Path="Track.Website/Track.Website.csproj" />
+  <Project Path="Track/Track.csproj" />
+</Solution>

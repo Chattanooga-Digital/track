@@ -1,0 +1,24 @@
+# Build outputs — regenerated inside the image
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+Track.Website/wwwroot/
+
+# Local data and secrets
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/appsettings.local.json
+**/keys/
+
+# VCS and tooling
+.git/
+.github/
+**/.vscode/
+**/.eslintcache
+
+# Docs and compose (not needed in the image)
+docs/
+docker-compose.yml
+*.md

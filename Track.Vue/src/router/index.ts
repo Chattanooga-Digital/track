@@ -1,0 +1,30 @@
+import { createRouter, createWebHistory } from 'vue-router'
+import DashboardView from '@/views/DashboardView.vue'
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes: [
+    {
+      path: '/',
+      name: 'dashboard',
+      component: DashboardView,
+    },
+    {
+      path: '/billing',
+      name: 'billing',
+      component: () => import('@/views/BillingView.vue'),
+    },
+    {
+      path: '/customers',
+      name: 'customers',
+      component: () => import('@/views/CustomersView.vue'),
+    },
+    {
+      path: '/stacks',
+      name: 'stacks',
+      component: () => import('@/views/StacksView.vue'),
+    },
+  ],
+})
+
+export default router
