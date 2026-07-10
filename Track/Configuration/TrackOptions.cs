@@ -15,14 +15,13 @@ public class TrackOptions
     public int PollIntervalSeconds { get; set; } = 15;
     public int DiskPollIntervalSeconds { get; set; } = 300;
     public int RetentionDays { get; set; } = 14;
-    public string[] CorsOrigins { get; set; } = ["http://localhost:5173", "https://localhost:5173"];
     public List<DockerNodeOptions> Nodes { get; set; } = [];
 
     /// <summary>Seed admin username. The account is created on first startup if no users exist.</summary>
     public string AdminUsername { get; set; } = "admin";
 
-    /// <summary>Seed admin email (Identity requires one). Defaults from the username.</summary>
-    public string? AdminEmail { get; set; }
+    /// <summary>Seed admin email (Identity requires one).</summary>
+    public string? AdminEmail { get; set; } = "admin@chattanooga.digital";
 
     /// <summary>Seed admin password. Change this in production via config or the Track__AdminPassword env var.</summary>
     public string AdminPassword { get; set; } = "admin";

@@ -147,12 +147,34 @@ discovers them with `ApplyConfigurationsFromAssembly`. Do not put fluent config 
 
 ### Database
 
-- SQLite, one file (`track.db`). Schema is created on startup by
-  `DatabaseInitializer` (migrations if present, else `EnsureCreated`).
+- SQLite, one file (`track.db`). **EF Core migrations are applied on startup** by
+  `DatabaseInitializer.InitializeAsync` (`context.Database.MigrateAsync()`), then the admin
+  is seeded. Migrations live in `Track/Migrations/`.
 - Always async EF methods; `.AsNoTracking()` on read-only queries; project with
   `.Select(...)` rather than loading full entities.
 - The two sample tables are append-heavy time series — indexed on `Timestamp` and
   `(StackName, Timestamp)`. Pruning keeps them bounded.
+
+#### Migrations
+
+`dotnet ef` builds the context through `TrackContextFactory` (an
+`IDesignTimeDbContextFactory` in `Track/Data/`) so scaffolding does not run the Website's
+startup/seeding. Add a migration after any entity change — combine all schema changes for
+one piece of work into a single migration:
+
+```bash
+# Add a migration (from repo root)
+dotnet ef migrations add <Name> \
+    --project Track/Track.csproj \
+    --startup-project Track.Website/Track.Website.csproj
+
+# Remove the last (unapplied) migration
+dotnet ef migrations remove \
+    --project Track/Track.csproj \
+    --startup-project Track.Website/Track.Website.csproj
+```
+
+There is no need to apply migrations by hand — the app runs them on the next startup.
 
 ### Controllers
 

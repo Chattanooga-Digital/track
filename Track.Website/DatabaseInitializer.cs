@@ -15,17 +15,8 @@ public static class DatabaseInitializer
         var context = scope.ServiceProvider.GetRequiredService<TrackContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<TrackContext>>();
 
-        var migrations = context.Database.GetMigrations();
-        if (migrations.Any())
-        {
-            logger.LogInformation("Applying database migrations...");
-            await context.Database.MigrateAsync();
-        }
-        else
-        {
-            logger.LogInformation("No migrations found. Ensuring database schema is created...");
-            await context.Database.EnsureCreatedAsync();
-        }
+        logger.LogInformation("Applying database migrations...");
+        await context.Database.MigrateAsync();
 
         await SeedAdminAsync(scope.ServiceProvider, logger);
 

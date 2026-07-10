@@ -12,65 +12,49 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
 builder.Configuration.AddEnvironmentVariables();
 
-builder.Services.AddControllers()
+builder.Services
+    .AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
-    });
-builder.Services.AddOpenApi();
-builder.Services.AddSignalR();
-
-// AddTrack wires up Identity (AddIdentity + cookie configuration); see Track/DependencyInjection.
-builder.Services.AddTrack(builder.Configuration);
-builder.Services.AddScoped<SnapshotBuilder>();
-
-builder.Services.AddAuthorization();
-
-var corsOrigins = builder.Configuration
-    .GetSection($"{TrackOptions.Section}:CorsOrigins")
-    .Get<string[]>()
-    ?? ["http://localhost:5173", "https://localhost:5173"];
-
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("VueDevServer", policy =>
-    {
-        policy.WithOrigins(corsOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
-});
-
-builder.Services.AddHostedService<StatsPollingHostedService>();
-builder.Services.AddHostedService<DiskPollingHostedService>();
-builder.Services.AddHostedService<SamplePruningHostedService>();
+    })
+    .Services
+    .AddOpenApi()
+    .AddSignalR()
+    .Services
+    // AddTrack wires up Identity (AddIdentity + cookie configuration); see Track/DependencyInjection.
+    .AddTrack(builder.Configuration)
+    .AddScoped<SnapshotBuilder>()
+    .AddAuthorization()
+    .AddHostedService<StatsPollingHostedService>()
+    .AddHostedService<DiskPollingHostedService>()
+    .AddHostedService<SamplePruningHostedService>();
 
 var app = builder.Build();
 
 await DatabaseInitializer.InitializeAsync(app.Services);
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+app
+    .UseForwardedHeaders(new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+    })
+    .UseDefaultFiles()
+    .UseStaticFiles()
+    .UseRouting()
+    .UseAuthentication()
+    .UseAuthorization()
+    .UseEndpoints(endpoints =>
+    {
+        if (app.Environment.IsDevelopment())
+        {
+            endpoints.MapOpenApi();
+        }
 
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
-
-app.UseRouting();
-app.UseCors("VueDevServer");
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapControllers();
-app.MapHub<TrackHub>(TrackHub.HubPath);
-
-app.UseDefaultFiles();
-app.UseStaticFiles();
-app.MapFallbackToFile("index.html");
+        endpoints.MapControllers();
+        endpoints.MapHub<TrackHub>(TrackHub.HubPath);
+        endpoints.MapFallbackToFile("index.html");
+    });
 
 await app.RunAsync();
