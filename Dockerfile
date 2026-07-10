@@ -19,11 +19,21 @@ WORKDIR /src/Track.Vue
 RUN npm ci && npm run build
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS publish
-ARG version=0.0.0
+# Named APP_VERSION, not "version": BuildKit exposes ARGs as env vars in RUN, and MSBuild
+# imports env vars as properties case-insensitively, so a lowercase "version" would leak in
+# as the Version property and break the build with the branch name on non-tag builds.
+ARG APP_VERSION=
 WORKDIR /src
 COPY . .
 WORKDIR /src/Track.Website
-RUN dotnet publish "Track.Website.csproj" -c Release -o /app/publish /p:Version=${version}
+# metadata-action feeds the branch name (e.g. "master") as the version on non-tag builds,
+# which is not a valid MSBuild version. Only override when it parses as a real version;
+# otherwise fall back to the csproj <VersionPrefix>.
+RUN if echo "${APP_VERSION}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'; then \
+        dotnet publish "Track.Website.csproj" -c Release -o /app/publish "/p:Version=${APP_VERSION}"; \
+    else \
+        dotnet publish "Track.Website.csproj" -c Release -o /app/publish; \
+    fi
 
 FROM base AS final
 WORKDIR /app
