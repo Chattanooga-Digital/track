@@ -1,0 +1,43 @@
+# Central Track instance for Docker Swarm: serves the UI/API/live feed behind Traefik and aggregates
+# metrics pushed by the agents (see track-agent.stack.yml). It does NOT read the docker socket, so it
+# needs no socket mount and no docker-group user override.
+#
+# Deploy:  docker stack deploy -c deploy/track-central.stack.yml track
+version: "3.8"
+
+services:
+  track:
+    image: strangewill/track:latest
+    networks:
+      - traefik_net
+    volumes:
+      - track-data:/app/data
+    environment:
+      ConnectionStrings__Default: "Data Source=/app/data/track.db"
+      Track__DataProtectionKeysPath: "/app/data/keys"
+      Track__AdminUsername: "admin"
+      Track__AdminPassword: "${TRACK_ADMIN_PASSWORD}"     # set in the Portainer stack env vars
+      # Shared secret every agent must present. Set to a long random string; the agents use the same value.
+      Track__Ingest__Key: "${TRACK_INGEST_KEY}"
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager     # pinned: the SQLite volume is node-local
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=traefik_net"
+        - "traefik.http.routers.track.rule=Host(`track.chattanooga.digital`)"
+        - "traefik.http.routers.track.entrypoints=websecure"
+        - "traefik.http.routers.track.tls=true"
+        - "traefik.http.routers.track.tls.certresolver=le"
+        - "traefik.http.services.track.loadbalancer.server.port=5020"
+      restart_policy:
+        condition: any
+
+networks:
+  traefik_net:
+    external: true
+
+volumes:
+  track-data:

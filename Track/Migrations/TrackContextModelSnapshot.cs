@@ -233,6 +233,28 @@ namespace Track.Migrations
                     b.ToTable("DiskSamples");
                 });
 
+            modelBuilder.Entity("Track.Data.Models.IdentityEnvVar", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("IdentityEnvVars");
+                });
+
             modelBuilder.Entity("Track.Data.Models.Role", b =>
                 {
                     b.Property<Guid>("Id")

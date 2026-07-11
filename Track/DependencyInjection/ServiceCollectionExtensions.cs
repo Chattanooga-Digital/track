@@ -58,11 +58,26 @@ public static class ServiceCollectionExtensions
             services.AddDataProtection()
                 .PersistKeysToFileSystem(new DirectoryInfo(options.DataProtectionKeysPath));
 
+        services.AddSingleton<CurrentStateHolder>();
+        services.AddSingleton<ContainerInventoryHolder>();
+        services.AddSingleton<IdentityEnvVarStore>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the Docker collectors (stats + disk). Needed by agents, which read the local socket,
+    /// and by the historical direct-poll mode. The pure-aggregator central instance does not use these.
+    /// </summary>
+    public static IServiceCollection AddDockerCollectors(this IServiceCollection services)
+    {
         services.AddSingleton<DockerClientFactory>();
         services.AddSingleton<DockerDfClient>();
+        // Singletons so the env-inspect cache is shared between the stats and disk collectors.
+        services.AddSingleton<IdentityEnvVarProvider>();
+        services.AddSingleton<ContainerGroupResolver>();
         services.AddSingleton<DockerStatsCollector>();
         services.AddSingleton<DockerDiskCollector>();
-        services.AddSingleton<CurrentStateHolder>();
 
         return services;
     }

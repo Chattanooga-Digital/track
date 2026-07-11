@@ -11,6 +11,7 @@ public class TrackContext(DbContextOptions<TrackContext> options)
     public DbSet<StackAssignment> StackAssignments => Set<StackAssignment>();
     public DbSet<ContainerSample> ContainerSamples => Set<ContainerSample>();
     public DbSet<DiskSample> DiskSamples => Set<DiskSample>();
+    public DbSet<IdentityEnvVar> IdentityEnvVars => Set<IdentityEnvVar>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

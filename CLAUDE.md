@@ -34,25 +34,46 @@ Track.Vue/        # Vue 3 + TypeScript frontend (builds into Track.Website/wwwro
 - Axios for REST, `@microsoft/signalr` for the live feed
 - Chart.js + vue-chartjs for history charts
 
+## Roles: Agent and Central
+
+Track is **one app, one image, two roles**, selected by `Track:Mode` (`Central` default,
+or `Agent`). `Program.cs` branches on it at startup. An **agent** runs on every node
+(Swarm `mode: global`), reads its own local Docker socket, and pushes readings to the
+**central** instance over HTTP. The central serves the UI/API/live feed and aggregates
+what agents push — it does **not** read any Docker socket (pure aggregator). This keeps
+each node's Docker API off the network: agents only make outbound calls.
+
 ## How the Data Flows
 
 ```
-DockerStatsCollector ─┐
-                      ├─► StatsPollingHostedService ─► CurrentStateHolder ─► SnapshotBuilder ─► SignalR ─► Vue
-DockerDiskCollector ──┘            │                        (in-memory)            │
-                                   └─► ContainerSamples / DiskSamples (SQLite) ────┴─► StatsController /history ─► charts
+[each node]                              [central]
+DockerStatsCollector ─┐                  IngestController ─► CurrentStateHolder ─► SnapshotBuilder ─► SignalR ─► Vue
+                      ├─► Push services ──► POST /ingest        (in-memory)             │
+DockerDiskCollector ──┘   (HTTP + secret)      │                                        │
+                                               └─► ContainerSamples / DiskSamples ──────┴─► StatsController /history ─► charts
+                                                   (SQLite, central only)
 ```
 
-1. **`StatsPollingHostedService`** (interval `Track:PollIntervalSeconds`, default 15s)
-   lists containers on every configured node and pulls a one-shot stats reading for
-   each. It writes raw `ContainerSample` rows to SQLite, updates the in-memory
-   `CurrentStateHolder`, then broadcasts a grouped `SnapshotDto` over SignalR.
-2. **`DiskPollingHostedService`** (interval `Track:DiskPollIntervalSeconds`, default
-   300s — `/system/df` is expensive) records per-container writable-layer sizes and
-   per-volume sizes as `DiskSample` rows and merges them into `CurrentStateHolder`.
-3. **`SamplePruningHostedService`** deletes samples older than `Track:RetentionDays`.
-4. **`SnapshotBuilder`** joins the latest poll results with the customer/stack
+1. **Agent — `StatsPushHostedService`** (interval `Track:PollIntervalSeconds`, default
+   15s) lists local containers, pulls a one-shot stats reading for each, and POSTs a
+   `StatsReport` to the central's `/api/v0/ingest/stats`.
+2. **Agent — `DiskPushHostedService`** (interval `Track:DiskPollIntervalSeconds`, default
+   300s — `/system/df` is expensive) POSTs a `DiskReport` of per-container writable-layer
+   and per-volume sizes to `/api/v0/ingest/disk`.
+3. **Central — `IngestController`** validates the shared secret (`X-Track-Key` vs
+   `Track:Ingest:Key`, constant-time), writes `ContainerSample`/`DiskSample` rows to
+   SQLite, merges into the in-memory `CurrentStateHolder`, then broadcasts a grouped
+   `SnapshotModel` over SignalR.
+4. **Central — `NodeReaperHostedService`** marks a node offline and drops its stale
+   samples once it stops pushing for `Track:NodeOfflineAfterSeconds` (default 45s), then
+   rebroadcasts. This replaces the per-poll reachability check the old direct-poll model had.
+5. **Central — `SamplePruningHostedService`** deletes samples older than `Track:RetentionDays`.
+6. **Central — `SnapshotBuilder`** joins the latest results with the customer/stack
    assignments from SQLite into the customer → stack → container tree the UI renders.
+
+Agents identify themselves by a stable node name (`AgentNodeNameResolver`): an explicit
+`Track:NodeName`, else the Docker engine's own hostname (`/info` Name) — never the
+container hostname, which changes on restart and would mint phantom nodes.
 
 ## Authentication
 
@@ -100,31 +121,62 @@ The `Billing` page ranks customers by blended share and surfaces the unbilled
 
 - **Stack**: derived from container labels — `com.docker.stack.namespace` (Swarm) or
   `com.docker.compose.project` (Compose). See `Services/Docker/DockerLabels.cs`.
-  A container with neither label is grouped under the "No stack" bucket.
 - **Customer**: a `Customer` row with a set of `StackAssignment` rows (one per stack
   name). Stack names are matched case-insensitively and are unique across customers —
   assigning a stack that already belongs to another customer moves it.
 - Stacks not assigned to any customer appear under the "Unassigned stacks" group.
 
+### Label-less standalone containers (env-var identity)
+
+Plain `docker run` containers (e.g. a Discourse forum) have no stack/compose label. Rather
+than fall into a single "No stack" bucket, the agent groups them by a chosen **environment
+variable's value** (its `DISCOURSE_HOSTNAME`, say), which becomes a synthetic stack name and
+then flows through the normal stack → customer assignment unchanged.
+
+- `ContainerGroupResolver` (agent, `Services/Docker/`) derives the key: stack/compose label
+  first (no inspect); otherwise it inspects the container once (env is immutable, cached by
+  container ID) and returns the value of the first configured identity env var present.
+- The ordered identity list lives centrally (`IdentityEnvVar` table, edited via
+  `/api/v0/grouping/identity-env-vars` and the **Unidentified** UI view) and is handed back to
+  agents in the ingest push **response** (`IngestResponse`) — the one central→agent channel.
+- **Security:** the agent surfaces only env var **key names** (in `StatsReport.Inventory`, held
+  live in `ContainerInventoryHolder`), never values. Only the single chosen identity value ever
+  reaches the central, as the stack name. Container secrets never leave the node. Secret-looking
+  keys (names matching `SensitiveEnvKeys.Markers` — `password`, `secret`, `token`, …) are dropped
+  from the inventory, refused as an identity by the resolver, and rejected by `GroupingController`,
+  so a secret's value can never be sent as a stack name.
+- A container with no matching identity var stays in the inventory (`GET /api/v0/inventory`)
+  awaiting a choice; there is no image fallback (images collide across customers).
+
 ## Multi-Node / Swarm Configuration
 
-Nodes are configured in `appsettings.json` under `Track:Nodes` (or the
-`Track__Nodes__*` env vars). With none configured, the app falls back to the local
-socket `unix:///var/run/docker.sock`.
+`docker stats` and `/system/df` are per-engine — a node only reports its own
+containers. Rather than exposing every node's Docker API over the network, Track covers
+a swarm by running an **agent on each node** that reads its local socket and pushes to
+the **central** instance. Deploy the agent as a Swarm `mode: global` service so it lands
+on every node (including new ones) automatically.
 
-```json
-"Track": {
-  "Nodes": [
-    { "Name": "manager", "Endpoint": "unix:///var/run/docker.sock" },
-    { "Name": "worker-1", "Endpoint": "tcp://10.0.0.11:2375" }
-  ]
-}
+Example stacks live in `deploy/`:
+- `deploy/track-central.stack.yml` — the central service behind Traefik. No socket mount.
+- `deploy/track-agent.stack.yml` — the global agent. Mounts each node's socket read-only.
+
+Key config:
+
+```
+# Central
+Track__Ingest__Key      shared secret agents must present (unset = ingest disabled)
+
+# Agent
+Track__Mode=Agent
+Track__Central__Url     e.g. http://track:5020 (central's swarm service name on the shared overlay)
+Track__Central__Key     must equal the central's Track__Ingest__Key
+Track__NodeName         optional; in Swarm set to {{.Node.Hostname}} (else the engine hostname is used)
 ```
 
-`docker stats` and `/system/df` are per-engine (a node only reports its own
-containers), so to cover a whole swarm either expose each node's engine over TCP and
-list them all here, or run one Track instance per node. A node that is unreachable
-is reported as offline in the UI; its stale samples are dropped rather than shown as
+The agent reads its own socket, so it still needs the docker-socket group. In the stack
+that is `user: "5678:<GID>"` where `<GID>` is `stat -c '%g' /var/run/docker.sock` on the
+node. An agent that stops pushing is marked offline by the central after
+`Track:NodeOfflineAfterSeconds`, and its stale samples are dropped rather than shown as
 current.
 
 ## C# Coding Conventions

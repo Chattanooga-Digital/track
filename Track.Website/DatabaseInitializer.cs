@@ -20,6 +20,13 @@ public static class DatabaseInitializer
 
         await SeedAdminAsync(scope.ServiceProvider, logger);
 
+        // Prime the identity env-var cache so grouping config survives restarts and is served on the first push.
+        var identityEnvVarStore = scope.ServiceProvider.GetRequiredService<Track.Services.IdentityEnvVarStore>();
+        identityEnvVarStore.Set(await context.IdentityEnvVars
+            .OrderBy(e => e.SortOrder)
+            .Select(e => e.Name)
+            .ToListAsync());
+
         logger.LogInformation("Database ready.");
     }
 

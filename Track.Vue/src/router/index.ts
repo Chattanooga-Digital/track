@@ -24,6 +24,11 @@ const router = createRouter({
       name: 'stacks',
       component: () => import('@/views/StacksView.vue'),
     },
+    {
+      path: '/unidentified',
+      name: 'unidentified',
+      component: () => import('@/views/UnidentifiedView.vue'),
+    },
   ],
 })
 

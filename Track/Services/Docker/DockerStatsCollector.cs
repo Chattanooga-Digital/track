@@ -1,16 +1,22 @@
+using System.Collections.Concurrent;
 using global::Docker.DotNet;
 using global::Docker.DotNet.Models;
 using Track.Configuration;
 using Track.Data.Models;
+using Track.Services.Ingest;
 using Microsoft.Extensions.Logging;
 
 namespace Track.Services.Docker;
 
-public sealed class DockerStatsCollector(DockerClientFactory clientFactory, ILogger<DockerStatsCollector> logger)
+public sealed class DockerStatsCollector(
+    DockerClientFactory clientFactory,
+    ContainerGroupResolver groupResolver,
+    ILogger<DockerStatsCollector> logger)
 {
     private const int MaxConcurrentStatsRequests = 8;
 
     private readonly DockerClientFactory _clientFactory = clientFactory;
+    private readonly ContainerGroupResolver _groupResolver = groupResolver;
     private readonly ILogger<DockerStatsCollector> _logger = logger;
 
     public async Task<NodeCollection> CollectAsync(
@@ -20,6 +26,8 @@ public sealed class DockerStatsCollector(DockerClientFactory clientFactory, ILog
         var info = await client.System.GetSystemInfoAsync(cancellationToken);
         var capacity = new NodeCapacity(node.Name, info.NCPU, info.MemTotal);
         var containers = await client.Containers.ListContainersAsync(new ContainersListParameters(), cancellationToken);
+
+        var inventory = new ConcurrentBag<LabelLessContainer>();
 
         using var throttle = new SemaphoreSlim(MaxConcurrentStatsRequests);
         var tasks = containers.Select(async container =>
@@ -31,13 +39,21 @@ public sealed class DockerStatsCollector(DockerClientFactory clientFactory, ILog
                 if (stats is null)
                     return null;
 
+                var containerName = container.Names?.FirstOrDefault()?.TrimStart('/') ?? container.ID;
+                var group = await _groupResolver.ResolveAsync(
+                    node.Endpoint, container.ID, container.Labels, cancellationToken);
+
+                // Label-less standalone containers are offered to the central so a grouping identity can be chosen.
+                if (group.LabelLess)
+                    inventory.Add(new LabelLessContainer(container.ID, containerName, container.Image, [.. group.EnvKeys]));
+
                 return new ContainerSample
                 {
                     Timestamp = timestamp,
                     NodeName = node.Name,
                     ContainerId = container.ID,
-                    ContainerName = container.Names?.FirstOrDefault()?.TrimStart('/') ?? container.ID,
-                    StackName = DockerLabels.GetStackName(container.Labels),
+                    ContainerName = containerName,
+                    StackName = group.StackName,
                     ServiceName = DockerLabels.GetServiceName(container.Labels),
                     CpuPercent = ComputeCpuPercent(stats),
                     MemoryUsedBytes = ComputeMemoryUsedBytes(stats),
@@ -57,7 +73,8 @@ public sealed class DockerStatsCollector(DockerClientFactory clientFactory, ILog
         }).ToList();
 
         var samples = await Task.WhenAll(tasks);
-        return new NodeCollection(capacity, [.. samples.OfType<ContainerSample>()]);
+        _groupResolver.RetainOnly(containers.Select(c => c.ID).ToHashSet());
+        return new NodeCollection(capacity, [.. samples.OfType<ContainerSample>()], [.. inventory]);
     }
 
     private static async Task<ContainerStatsResponse?> GetStatsOnceAsync(

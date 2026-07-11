@@ -8,14 +8,70 @@ public class DockerNodeOptions
     public required string Endpoint { get; set; }
 }
 
+/// <summary>Which role this instance runs as. See <see cref="TrackMode"/>.</summary>
+public enum TrackMode
+{
+    /// <summary>Serves the UI/API/SignalR and aggregates metrics pushed by agents. Does not poll Docker.</summary>
+    Central,
+
+    /// <summary>Polls the local Docker socket and pushes the readings to a central instance. No UI/DB.</summary>
+    Agent,
+}
+
+/// <summary>Agent-side connection to the central instance it pushes readings to.</summary>
+public class CentralConnectionOptions
+{
+    /// <summary>Base URL of the central instance, e.g. http://track:5020 on the swarm overlay network.</summary>
+    public string? Url { get; set; }
+
+    /// <summary>Shared secret sent on every push; must equal the central's <see cref="IngestOptions.Key"/>.</summary>
+    public string? Key { get; set; }
+}
+
+/// <summary>Central-side ingest settings for accepting agent pushes.</summary>
+public class IngestOptions
+{
+    /// <summary>Shared secret required on ingest requests. When unset, ingest is disabled (agents cannot push).</summary>
+    public string? Key { get; set; }
+}
+
 public class TrackOptions
 {
     public const string Section = "Track";
 
+    /// <summary>The local Docker engine socket, used by agents (and the historical single-node fallback).</summary>
+    public const string LocalDockerSocket = "unix:///var/run/docker.sock";
+
+    /// <summary>Central (default) aggregates pushed metrics; Agent polls the local socket and pushes them.</summary>
+    public TrackMode Mode { get; set; } = TrackMode.Central;
+
+    /// <summary>
+    /// Name this node reports as. Agents default to the machine name; in Swarm set it to the node hostname
+    /// with a service template: Track__NodeName={{.Node.Hostname}}.
+    /// </summary>
+    public string? NodeName { get; set; }
+
+    /// <summary>Central marks a node offline if it has not pushed a reading within this window.</summary>
+    public int NodeOfflineAfterSeconds { get; set; } = 45;
+
+    /// <summary>Agent -> central connection (Agent mode only).</summary>
+    public CentralConnectionOptions Central { get; set; } = new();
+
+    /// <summary>Central-side ingest secret (Central mode only).</summary>
+    public IngestOptions Ingest { get; set; } = new();
+
+    /// <summary>
+    /// Agent-side bootstrap for the ordered env-var identity list used to group label-less standalone
+    /// containers (index 0 = highest priority). The value of the first matching env var becomes the
+    /// container's stack name. The central overrides this at runtime via the push response; this seed
+    /// only applies until the first response arrives. Only the resolved value is ever sent to the
+    /// central - raw env (which holds secrets) never leaves the agent.
+    /// </summary>
+    public List<string> GroupingEnvVars { get; set; } = [];
+
     public int PollIntervalSeconds { get; set; } = 15;
     public int DiskPollIntervalSeconds { get; set; } = 300;
     public int RetentionDays { get; set; } = 14;
-    public List<DockerNodeOptions> Nodes { get; set; } = [];
 
     /// <summary>Seed admin username. The account is created on first startup if no users exist.</summary>
     public string AdminUsername { get; set; } = "admin";
@@ -31,9 +87,4 @@ public class TrackOptions
     /// path on a mounted volume so sessions survive restarts; null uses the framework default.
     /// </summary>
     public string? DataProtectionKeysPath { get; set; }
-
-    /// <summary>Configured nodes, or the local Docker socket when none are configured.</summary>
-    public List<DockerNodeOptions> ResolveNodes() => Nodes.Count > 0
-        ? Nodes
-        : [new DockerNodeOptions { Name = Environment.MachineName, Endpoint = "unix:///var/run/docker.sock" }];
 }

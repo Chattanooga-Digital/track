@@ -53,6 +53,7 @@ async function logout() {
           <v-btn to="/billing" variant="text" size="small" prepend-icon="mdi-cash-multiple">Billing</v-btn>
           <v-btn to="/customers" variant="text" size="small" prepend-icon="mdi-account-group">Customers</v-btn>
           <v-btn to="/stacks" variant="text" size="small" prepend-icon="mdi-layers">Stacks</v-btn>
+          <v-btn to="/unidentified" variant="text" size="small" prepend-icon="mdi-help-network">Unidentified</v-btn>
 
           <v-chip
             size="small"

@@ -1,27 +1,41 @@
 services:
-  metrics:
+  # Central: serves the UI/API/live feed and aggregates metrics pushed by agents. No docker socket.
+  track:
     build:
       context: .
-      args:
-        # Match the GID of the host's docker socket group so the container can read it.
-        # Find it with: stat -c '%g' /var/run/docker.sock
-        DOCKER_GID: ${DOCKER_GID:-988}
     image: strangewill/track:latest
     ports:
       - "5020:5020"
     volumes:
-      # Read-only access to the local engine, and a persistent volume for the SQLite history.
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - track-data:/app/data
     environment:
       ConnectionStrings__Default: "Data Source=/app/data/track.db"
-      Track__PollIntervalSeconds: "15"
-      Track__DiskPollIntervalSeconds: "300"
-      Track__RetentionDays: "14"
-      # Persist auth-cookie signing keys on the data volume so logins survive restarts.
       Track__DataProtectionKeysPath: "/app/data/keys"
+      # Shared secret agents present when pushing. Must match the agent's Track__Central__Key below.
+      Track__Ingest__Key: "${TRACK_INGEST_KEY:-changeme}"
       # Change this before deploying.
       Track__AdminPassword: "admin"
+    restart: unless-stopped
+
+  # Agent: reads the local docker socket and pushes readings to the central instance. One per node.
+  track-agent:
+    build:
+      context: .
+    image: strangewill/track:latest
+    depends_on:
+      - track
+    volumes:
+      # Read-only access to the local engine.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Grant the host's docker-socket group at runtime; must equal `stat -c '%g' /var/run/docker.sock`.
+    group_add:
+      - "${DOCKER_GID:-988}"
+    environment:
+      Track__Mode: "Agent"
+      Track__Central__Url: "http://track:5020"
+      Track__Central__Key: "${TRACK_INGEST_KEY:-changeme}"
+      Track__PollIntervalSeconds: "15"
+      Track__DiskPollIntervalSeconds: "300"
     restart: unless-stopped
 
 volumes:

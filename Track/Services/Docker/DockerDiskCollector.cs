@@ -4,9 +4,10 @@ using Track.Enums;
 
 namespace Track.Services.Docker;
 
-public sealed class DockerDiskCollector(DockerDfClient dfClient)
+public sealed class DockerDiskCollector(DockerDfClient dfClient, ContainerGroupResolver groupResolver)
 {
     private readonly DockerDfClient _dfClient = dfClient;
+    private readonly ContainerGroupResolver _groupResolver = groupResolver;
 
     public async Task<List<DiskSample>> CollectAsync(
         DockerNodeOptions node, DateTime timestamp, CancellationToken cancellationToken = default)
@@ -16,6 +17,11 @@ public sealed class DockerDiskCollector(DockerDfClient dfClient)
 
         foreach (var container in usage.Containers ?? [])
         {
+            // Same grouping key the stats collector produced (env cache shared via the singleton resolver),
+            // so a standalone container's writable-layer bytes roll into its synthetic group.
+            var group = await _groupResolver.ResolveAsync(
+                node.Endpoint, container.Id, container.Labels, cancellationToken);
+
             samples.Add(new DiskSample
             {
                 Timestamp = timestamp,
@@ -23,7 +29,7 @@ public sealed class DockerDiskCollector(DockerDfClient dfClient)
                 Kind = DiskUsageKind.ContainerLayer,
                 Name = container.Names?.FirstOrDefault()?.TrimStart('/') ?? container.Id,
                 ContainerId = container.Id,
-                StackName = DockerLabels.GetStackName(container.Labels),
+                StackName = group.StackName,
                 SizeBytes = container.SizeRw,
             });
         }

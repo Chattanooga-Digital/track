@@ -1,5 +1,6 @@
 using Track.Data.Models;
 using Track.Enums;
+using Track.Services.Ingest;
 
 namespace Track.Services;
 
@@ -8,8 +9,11 @@ public record NodeStatus(string Name, bool Online, string? Error, DateTime? Last
 /// <summary>Total schedulable capacity of one Docker node.</summary>
 public record NodeCapacity(string NodeName, long CpuCores, long MemoryBytes);
 
-/// <summary>Result of one node's stats poll: its capacity plus a sample per running container.</summary>
-public record NodeCollection(NodeCapacity Capacity, List<ContainerSample> Samples);
+/// <summary>
+/// Result of one node's stats poll: its capacity, a sample per running container, and the inventory of
+/// label-less standalone containers (for the central to offer as groupable identities).
+/// </summary>
+public record NodeCollection(NodeCapacity Capacity, List<ContainerSample> Samples, List<LabelLessContainer> Inventory);
 
 /// <summary>Summed capacity across all online nodes.</summary>
 public record ClusterCapacity(int NodeCount, long CpuCores, long MemoryBytes);
@@ -65,6 +69,34 @@ public sealed class CurrentStateHolder
                 .Where(s => s.Kind == DiskUsageKind.Volume && s.StackName is not null)
                 .GroupBy(s => s.StackName!)
                 .ToDictionary(g => g.Key, g => g.Sum(s => s.SizeBytes));
+        }
+    }
+
+    /// <summary>
+    /// Mark any node that last reported more than <paramref name="maxAge"/> ago as offline and drop its
+    /// stale samples, mirroring <see cref="SetNodeError"/>. Returns the names of the nodes just expired
+    /// (empty if none), so the caller can clear their inventory and rebroadcast. Used by the central
+    /// instance to expire agents that stop pushing.
+    /// </summary>
+    public IReadOnlyList<string> ExpireStaleNodes(TimeSpan maxAge, DateTime now)
+    {
+        lock (_lock)
+        {
+            var expired = new List<string>();
+            foreach (var (name, status) in _nodes.ToList())
+            {
+                if (!status.Online || status.LastSeen is not { } lastSeen || now - lastSeen <= maxAge)
+                    continue;
+
+                _samplesByNode.Remove(name);
+                _capacityByNode.Remove(name);
+                _containerLayerBytesByNode.Remove(name);
+                _stackVolumeBytesByNode.Remove(name);
+                _nodes[name] = status with { Online = false, Error = "No report received" };
+                expired.Add(name);
+            }
+
+            return expired;
         }
     }
 

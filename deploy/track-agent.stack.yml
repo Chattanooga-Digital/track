@@ -1,0 +1,34 @@
+# Track agents for Docker Swarm: one per node (mode: global), each reading its own local docker socket
+# and pushing readings to the central instance over the overlay network. As nodes join the swarm they get
+# an agent automatically. Agents make only outbound connections; no node exposes its docker API.
+#
+# Deploy:  docker stack deploy -c deploy/track-agent.stack.yml track-agent
+version: "3.8"
+
+services:
+  agent:
+    image: strangewill/track:latest
+    networks:
+      - traefik_net                  # same overlay as the central service, so `track` resolves
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Run as the image's non-root user with the node's docker-socket group so it can read the socket.
+    # 988 is this cluster's socket GID (stat -c '%g' /var/run/docker.sock); change if your nodes differ.
+    user: "5678:988"
+    environment:
+      Track__Mode: "Agent"
+      # Central is reachable by its swarm service name on the shared overlay; no Traefik/TLS hop needed.
+      Track__Central__Url: "http://track:5020"
+      Track__Central__Key: "${TRACK_INGEST_KEY}"     # must equal the central's Track__Ingest__Key
+      # Report under the swarm node's hostname (stable across container restarts), not the container id.
+      Track__NodeName: "{{.Node.Hostname}}"
+      Track__PollIntervalSeconds: "15"
+      Track__DiskPollIntervalSeconds: "300"
+    deploy:
+      mode: global                   # one agent on every node, including new ones
+      restart_policy:
+        condition: any
+
+networks:
+  traefik_net:
+    external: true
