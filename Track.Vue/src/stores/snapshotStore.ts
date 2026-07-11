@@ -11,7 +11,7 @@ export const useSnapshotStore = defineStore('snapshot', () => {
 
   const nodes = computed(() => snapshot.value?.nodes ?? [])
   const customers = computed(() => snapshot.value?.customers ?? [])
-  const offlineNodes = computed(() => nodes.value.filter(n => !n.online))
+  const offlineNodes = computed(() => nodes.value.filter((n) => !n.online))
 
   async function start() {
     // Seed immediately so the UI is not blank until the first broadcast arrives.

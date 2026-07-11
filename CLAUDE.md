@@ -120,6 +120,41 @@ computes, at container-group, stack, customer, and cluster level:
 The `Billing` page ranks customers by blended share and surfaces the unbilled
 (unassigned) remainder.
 
+## S3 Object Storage (Buckets)
+
+Docker's `/system/df` only sees container writable layers and named volumes, so bucket
+storage (and bind mounts) are invisible to the agents. Object storage is therefore polled
+**directly by the central**, not by agents:
+
+- `S3UsageCollector` (`Track/Services/S3/`) uses `AWSSDK.S3` against each configured
+  endpoint (path-style addressing, so MinIO works), lists buckets, and sizes each by
+  walking `ListObjectsV2` (one request per 1000 objects — hence a slow poll).
+- `S3UsageHostedService` (central-only) runs every `Track:S3PollIntervalSeconds`
+  (default 900s), writes `DiskSample` rows of `DiskUsageKind.Bucket`
+  (`NodeName` = source name, `Name` = bucket name), merges them into `CurrentStateHolder`
+  via `SetBucketUsage`, and rebroadcasts. Per-source failures are isolated and the last
+  good reading is kept (an unreachable endpoint doesn't mean the storage vanished).
+- Buckets are **first-class**, not synthetic stacks. A `BucketAssignment` row
+  (`SourceName` + `BucketName` → `CustomerId`, unique per bucket) maps a bucket to the
+  customer billed for it, mirroring `StackAssignment`. `BucketsController`
+  (`GET /api/v0/buckets`) lists them; `CustomersController` `PUT /customers/{id}/buckets`
+  assigns them (moving a bucket already owned elsewhere), matching the stack flow.
+- `SnapshotBuilder` places each bucket under its customer (or the unassigned group) and
+  rolls bucket bytes into `UsageTotalsModel.ObjectStorageBytes`, kept **separate** from
+  node-local `DiskBytes` at every level. Object storage does not affect blended billing
+  (which is CPU + memory only).
+
+Configure sources centrally (Central mode only):
+
+```
+Track__S3Sources__0__Name        short id, prefixes nothing but identifies the source in the UI
+Track__S3Sources__0__Endpoint    e.g. http://minio:9000
+Track__S3Sources__0__AccessKey
+Track__S3Sources__0__SecretKey
+Track__S3Sources__0__Region      optional, defaults to us-east-1 (MinIO ignores it)
+Track__S3PollIntervalSeconds     optional, default 900
+```
+
 ## Grouping Model
 
 - **Stack**: derived from container labels — `com.docker.stack.namespace` (Swarm) or
@@ -204,7 +239,7 @@ discovers them with `ApplyConfigurationsFromAssembly`. Do not put fluent config 
 
 - SQLite, one file (`track.db`). **EF Core migrations are applied on startup** by
   `DatabaseInitializer.InitializeAsync` (`context.Database.MigrateAsync()`), then the admin
-  is seeded. Migrations live in `Track/Migrations/`.
+  is seeded. Migrations live in `Track/Data/Migrations/`.
 - Always async EF methods; `.AsNoTracking()` on read-only queries; project with
   `.Select(...)` rather than loading full entities.
 - The two sample tables are append-heavy time series — indexed on `Timestamp` and
@@ -218,10 +253,11 @@ startup/seeding. Add a migration after any entity change — combine all schema 
 one piece of work into a single migration:
 
 ```bash
-# Add a migration (from repo root)
+# Add a migration (from repo root). Migrations live in Track/Data/Migrations, so pass --output-dir.
 dotnet ef migrations add <Name> \
     --project Track/Track.csproj \
-    --startup-project Track.Website/Track.Website.csproj
+    --startup-project Track.Website/Track.Website.csproj \
+    --output-dir Data/Migrations
 
 # Remove the last (unapplied) migration
 dotnet ef migrations remove \

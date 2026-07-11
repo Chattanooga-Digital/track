@@ -35,6 +35,26 @@ public class IngestOptions
     public string? Key { get; set; }
 }
 
+/// <summary>
+/// One S3-compatible endpoint (MinIO, AWS, ...) the central polls for per-bucket sizes. Each bucket
+/// surfaces as a synthetic stack named "{Name}/{bucket}" that can be assigned to a customer like any
+/// other stack.
+/// </summary>
+public class S3SourceOptions
+{
+    /// <summary>Short identifier for this source; prefixes the synthetic stack names, so keep it stable.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>Service URL, e.g. http://minio:9000. Path-style addressing is always used (MinIO default).</summary>
+    public string? Endpoint { get; set; }
+
+    public string? AccessKey { get; set; }
+    public string? SecretKey { get; set; }
+
+    /// <summary>Signing region; MinIO accepts the default.</summary>
+    public string Region { get; set; } = "us-east-1";
+}
+
 public class TrackOptions
 {
     public const string Section = "Track";
@@ -72,6 +92,15 @@ public class TrackOptions
     public int PollIntervalSeconds { get; set; } = 15;
     public int DiskPollIntervalSeconds { get; set; } = 300;
     public int RetentionDays { get; set; } = 14;
+
+    /// <summary>S3-compatible endpoints to poll for bucket sizes (Central mode only).</summary>
+    public List<S3SourceOptions> S3Sources { get; set; } = [];
+
+    /// <summary>
+    /// How often bucket sizes are polled. Sizing walks every object in every bucket
+    /// (one request per 1000 objects), so this stays on a slow cadence.
+    /// </summary>
+    public int S3PollIntervalSeconds { get; set; } = 900;
 
     /// <summary>Seed admin username. The account is created on first startup if no users exist.</summary>
     public string AdminUsername { get; set; } = "admin";

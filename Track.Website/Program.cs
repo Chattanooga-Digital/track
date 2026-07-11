@@ -50,7 +50,8 @@ builder.Services
     .AddScoped<SnapshotBuilder>()
     .AddAuthorization()
     .AddHostedService<NodeReaperHostedService>()
-    .AddHostedService<SamplePruningHostedService>();
+    .AddHostedService<SamplePruningHostedService>()
+    .AddHostedService<S3UsageHostedService>();
 
 var app = builder.Build();
 

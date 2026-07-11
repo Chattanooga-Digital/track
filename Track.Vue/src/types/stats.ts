@@ -16,9 +16,16 @@ export interface UsageTotalsDto {
   memoryUsedBytes: number
   memoryLimitBytes: number
   diskBytes: number
+  objectStorageBytes: number
   cpuPercentOfCluster: number
   memoryPercentOfCluster: number
   blendedPercentOfCluster: number
+}
+
+export interface BucketUsageDto {
+  sourceName: string
+  bucketName: string
+  sizeBytes: number
 }
 
 export interface ClusterCapacityDto {
@@ -38,6 +45,7 @@ export interface CustomerGroupDto {
   customerName: string | null
   totals: UsageTotalsDto
   stacks: StackGroupDto[]
+  buckets: BucketUsageDto[]
 }
 
 export interface NodeStatusDto {
@@ -67,4 +75,5 @@ export interface HistoryBucketDto {
   memoryUsedBytes: number
   memoryLimitBytes: number
   diskBytes: number | null
+  objectStorageBytes: number | null
 }

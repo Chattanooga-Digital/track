@@ -5,7 +5,9 @@ import { formatBytes, formatCpu, memoryPercent } from '@/utils/format'
 
 const props = defineProps<{ totals: UsageTotalsDto }>()
 
-const memPercent = computed(() => memoryPercent(props.totals.memoryUsedBytes, props.totals.memoryLimitBytes))
+const memPercent = computed(() =>
+  memoryPercent(props.totals.memoryUsedBytes, props.totals.memoryLimitBytes),
+)
 </script>
 
 <template>
@@ -26,6 +28,10 @@ const memPercent = computed(() => memoryPercent(props.totals.memoryUsedBytes, pr
     <div class="metric">
       <div class="text-caption text-medium-emphasis">Disk</div>
       <div class="text-h6">{{ formatBytes(totals.diskBytes) }}</div>
+    </div>
+    <div v-if="totals.objectStorageBytes > 0" class="metric">
+      <div class="text-caption text-medium-emphasis">Object storage</div>
+      <div class="text-h6">{{ formatBytes(totals.objectStorageBytes) }}</div>
     </div>
   </div>
 </template>

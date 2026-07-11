@@ -13,11 +13,11 @@ const total = computed(() => snapshot.value?.totals)
 // Rank customers by their blended cluster share, the billing figure.
 const rows = computed(() =>
   [...customers.value]
-    .filter(c => c.customerId !== null)
+    .filter((c) => c.customerId !== null)
     .sort((a, b) => b.totals.blendedPercentOfCluster - a.totals.blendedPercentOfCluster),
 )
 
-const unassigned = computed(() => customers.value.find(c => c.customerId === null))
+const unassigned = computed(() => customers.value.find((c) => c.customerId === null))
 
 function pct(value: number): string {
   return `${value.toFixed(2)}%`
@@ -33,8 +33,12 @@ function pct(value: number): string {
         <v-card variant="outlined">
           <v-card-text>
             <div class="text-caption text-medium-emphasis">Cluster capacity</div>
-            <div class="text-h6">{{ cluster?.cpuCores ?? 0 }} vCPU &middot; {{ formatBytes(cluster?.memoryBytes) }}</div>
-            <div class="text-caption text-medium-emphasis">{{ cluster?.nodeCount ?? 0 }} node(s)</div>
+            <div class="text-h6">
+              {{ cluster?.cpuCores ?? 0 }} vCPU &middot; {{ formatBytes(cluster?.memoryBytes) }}
+            </div>
+            <div class="text-caption text-medium-emphasis">
+              {{ cluster?.nodeCount ?? 0 }} node(s)
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -44,7 +48,8 @@ function pct(value: number): string {
             <div class="text-caption text-medium-emphasis">Total blended utilization</div>
             <div class="text-h4">{{ pct(total?.blendedPercentOfCluster ?? 0) }}</div>
             <div class="text-caption text-medium-emphasis">
-              CPU {{ pct(total?.cpuPercentOfCluster ?? 0) }} &middot; Mem {{ pct(total?.memoryPercentOfCluster ?? 0) }}
+              CPU {{ pct(total?.cpuPercentOfCluster ?? 0) }} &middot; Mem
+              {{ pct(total?.memoryPercentOfCluster ?? 0) }}
             </div>
           </v-card-text>
         </v-card>
@@ -54,7 +59,9 @@ function pct(value: number): string {
           <v-card-text>
             <div class="text-caption text-medium-emphasis">Unassigned (unbilled)</div>
             <div class="text-h4">{{ pct(unassigned?.totals.blendedPercentOfCluster ?? 0) }}</div>
-            <div class="text-caption text-medium-emphasis">{{ unassigned?.stacks.length ?? 0 }} stack(s) not mapped to a customer</div>
+            <div class="text-caption text-medium-emphasis">
+              {{ unassigned?.stacks.length ?? 0 }} stack(s) not mapped to a customer
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -93,8 +100,8 @@ function pct(value: number): string {
     </v-card>
 
     <p class="text-caption text-medium-emphasis mt-3">
-      Blended utilization is the mean of a customer's CPU share and memory share of total cluster capacity,
-      measured at the latest poll. Use the Stacks page for historical trends.
+      Blended utilization is the mean of a customer's CPU share and memory share of total cluster
+      capacity, measured at the latest poll. Use the Stacks page for historical trends.
     </p>
   </v-container>
 </template>

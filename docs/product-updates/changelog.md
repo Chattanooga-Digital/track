@@ -4,6 +4,13 @@ Welcome to the Track changelog. Here you'll find a history of product updates,
 improvements, bug fixes, and new features by version.
 
 ## Releases
+### 0.4.0 - 2026-07-11
+#### Features
+ - Track S3 object storage: the central polls configured S3-compatible endpoints (MinIO, AWS) for per-bucket sizes
+ - Assign buckets to customers from the Customers page, the same way you assign stacks
+ - Object storage is shown as its own figure on the dashboard, kept separate from node-local disk, and rolled into customer and cluster totals
+ - Configure endpoints via `Track:S3Sources` (name, endpoint, access key, secret key); polling runs on the slow `Track:S3PollIntervalSeconds` interval (default 15 minutes)
+
 ### 0.3.0 - 2026-07-11
 #### Features
  - New Agents page listing every connected agent with its status, last-seen time, containers tracked, unidentified count, CPU cores, and live CPU and memory usage

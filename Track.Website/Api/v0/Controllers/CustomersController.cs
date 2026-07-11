@@ -1,5 +1,6 @@
 using Track.Data;
 using Track.Data.Models;
+using Track.Website.Api.v0.Models.Buckets;
 using Track.Website.Api.v0.Models.Customers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -31,6 +32,10 @@ public class CustomersController(
                 Notes = c.Notes,
                 CreatedAt = c.CreatedAt,
                 StackNames = c.StackAssignments.Select(a => a.StackName).OrderBy(n => n).ToList(),
+                Buckets = c.BucketAssignments
+                    .OrderBy(a => a.SourceName).ThenBy(a => a.BucketName)
+                    .Select(a => new BucketRefModel { SourceName = a.SourceName, BucketName = a.BucketName })
+                    .ToList(),
             })
             .ToListAsync(cancellationToken);
 
@@ -130,6 +135,55 @@ public class CustomersController(
 
         TrackContext.StackAssignments.RemoveRange(customer.StackAssignments
             .Where(a => !names.Contains(a.StackName, StringComparer.OrdinalIgnoreCase)));
+
+        await TrackContext.SaveChangesAsync(cancellationToken);
+
+        return Ok();
+    }
+
+    /// <summary>Replaces the customer's assigned buckets; buckets already assigned elsewhere are moved here.</summary>
+    [HttpPut("{id:int}/buckets")]
+    public async Task<IActionResult> SetBuckets(
+        [FromRoute] int id, [FromBody] List<BucketRefModel> buckets, CancellationToken cancellationToken)
+    {
+        var customer = await TrackContext.Customers
+            .Include(c => c.BucketAssignments)
+            .SingleOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (customer is null)
+            return NotFound();
+
+        var refs = buckets
+            .Select(b => (Source: b.SourceName.Trim(), Bucket: b.BucketName.Trim()))
+            .Where(b => b.Source.Length > 0 && b.Bucket.Length > 0)
+            .Distinct()
+            .ToList();
+
+        // EF Core can't translate a tuple Contains, so match on the source set and filter names in memory.
+        var sources = refs.Select(b => b.Source).Distinct().ToList();
+        var candidates = await TrackContext.BucketAssignments
+            .Where(a => sources.Contains(a.SourceName))
+            .ToListAsync(cancellationToken);
+        var existing = candidates
+            .Where(a => refs.Any(r =>
+                string.Equals(r.Source, a.SourceName, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(r.Bucket, a.BucketName, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        foreach (var assignment in existing)
+            assignment.CustomerId = id;
+
+        bool AlreadyAssigned(string source, string bucket) => existing.Any(a =>
+            string.Equals(a.SourceName, source, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(a.BucketName, bucket, StringComparison.OrdinalIgnoreCase));
+
+        TrackContext.BucketAssignments.AddRange(refs
+            .Where(r => !AlreadyAssigned(r.Source, r.Bucket))
+            .Select(r => new BucketAssignment { SourceName = r.Source, BucketName = r.Bucket, CustomerId = id }));
+
+        bool Retained(BucketAssignment a) => refs.Any(r =>
+            string.Equals(r.Source, a.SourceName, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(r.Bucket, a.BucketName, StringComparison.OrdinalIgnoreCase));
+
+        TrackContext.BucketAssignments.RemoveRange(customer.BucketAssignments.Where(a => !Retained(a)));
 
         await TrackContext.SaveChangesAsync(cancellationToken);
 

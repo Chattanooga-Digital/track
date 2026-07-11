@@ -18,7 +18,7 @@ public class HistoryAggregatorTests
             new(From.AddSeconds(15), 25, 100, 1000),
         ];
 
-        var buckets = HistoryAggregator.Aggregate(usage, [], From, From.AddHours(1));
+        var buckets = HistoryAggregator.Aggregate(usage, [], [], From, From.AddHours(1));
 
         Assert.That(buckets, Has.Count.EqualTo(1));
         Assert.That(buckets[0].CpuPercent, Is.EqualTo(40.0).Within(0.001));
@@ -35,7 +35,7 @@ public class HistoryAggregatorTests
             new(From.AddMinutes(30), 30, 100, 1000),
         ];
 
-        var buckets = HistoryAggregator.Aggregate(usage, [], From, From.AddHours(1), targetBuckets: 2);
+        var buckets = HistoryAggregator.Aggregate(usage, [], [], From, From.AddHours(1), targetBuckets: 2);
 
         Assert.That(buckets, Has.Count.EqualTo(2));
         Assert.That(buckets[0].CpuPercent, Is.EqualTo(10.0).Within(0.001));
@@ -52,10 +52,27 @@ public class HistoryAggregatorTests
             new(From.AddMinutes(1), 3000),
         ];
 
-        var buckets = HistoryAggregator.Aggregate([], disk, From, From.AddHours(1));
+        var buckets = HistoryAggregator.Aggregate([], disk, [], From, From.AddHours(1));
 
         Assert.That(buckets, Has.Count.EqualTo(1));
         Assert.That(buckets[0].DiskBytes, Is.EqualTo(8000));
         Assert.That(buckets[0].CpuPercent, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Aggregate_SumsObjectStorageIntoItsOwnSeries()
+    {
+        List<HistoryAggregator.DiskPoint> objectStorage =
+        [
+            new(From.AddMinutes(1), 5_000),
+            new(From.AddMinutes(1), 3_000),
+        ];
+
+        var buckets = HistoryAggregator.Aggregate([], [], objectStorage, From, From.AddHours(1));
+
+        Assert.That(buckets, Has.Count.EqualTo(1));
+        Assert.That(buckets[0].ObjectStorageBytes, Is.EqualTo(8_000));
+        // Object storage is kept separate from node-local disk.
+        Assert.That(buckets[0].DiskBytes, Is.Null);
     }
 }

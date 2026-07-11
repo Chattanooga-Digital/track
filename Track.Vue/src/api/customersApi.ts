@@ -1,5 +1,5 @@
 import { http } from './http'
-import type { CustomerDto, CustomerEditDto } from '@/types/customer'
+import type { BucketRefDto, CustomerDto, CustomerEditDto } from '@/types/customer'
 
 export async function getCustomers(): Promise<CustomerDto[]> {
   const { data } = await http.get<CustomerDto[]>('/customers')
@@ -21,4 +21,8 @@ export async function deleteCustomer(id: number): Promise<void> {
 
 export async function setCustomerStacks(id: number, stackNames: string[]): Promise<void> {
   await http.put(`/customers/${id}/stacks`, stackNames)
+}
+
+export async function setCustomerBuckets(id: number, buckets: BucketRefDto[]): Promise<void> {
+  await http.put(`/customers/${id}/buckets`, buckets)
 }

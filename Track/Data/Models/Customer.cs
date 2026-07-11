@@ -11,6 +11,7 @@ public class Customer : IEntityTypeConfiguration<Customer>
     public DateTime CreatedAt { get; set; }
 
     public ICollection<StackAssignment> StackAssignments { get; set; } = [];
+    public ICollection<BucketAssignment> BucketAssignments { get; set; } = [];
 
     public void Configure(EntityTypeBuilder<Customer> builder)
     {

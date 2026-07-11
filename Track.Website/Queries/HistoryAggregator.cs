@@ -16,6 +16,7 @@ public static class HistoryAggregator
     public static List<HistoryBucketModel> Aggregate(
         IReadOnlyList<UsagePoint> usagePoints,
         IReadOnlyList<DiskPoint> diskPoints,
+        IReadOnlyList<DiskPoint> objectStoragePoints,
         DateTime from,
         DateTime to,
         int targetBuckets = 200)
@@ -48,6 +49,21 @@ public static class HistoryAggregator
                 {
                     BucketStart = BucketStart(group.Key, from, bucketSeconds),
                     DiskBytes = diskBytes,
+                };
+        }
+
+        foreach (var group in objectStoragePoints.GroupBy(p => BucketIndex(p.Timestamp, from, bucketSeconds)))
+        {
+            var pollRounds = group.Select(p => p.Timestamp).Distinct().Count();
+            var objectStorageBytes = (long)(group.Sum(p => (double)p.SizeBytes) / pollRounds);
+
+            if (buckets.TryGetValue(group.Key, out var bucket))
+                bucket.ObjectStorageBytes = objectStorageBytes;
+            else
+                buckets[group.Key] = new HistoryBucketModel
+                {
+                    BucketStart = BucketStart(group.Key, from, bucketSeconds),
+                    ObjectStorageBytes = objectStorageBytes,
                 };
         }
 

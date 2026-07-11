@@ -8,11 +8,11 @@ using Track.Data;
 
 #nullable disable
 
-namespace Track.Migrations
+namespace Track.Data.Migrations
 {
     [DbContext(typeof(TrackContext))]
-    [Migration("20260711005005_AddIdentityEnvVars")]
-    partial class AddIdentityEnvVars
+    [Migration("20260710230032_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -234,28 +234,6 @@ namespace Track.Migrations
                     b.HasIndex("StackName", "Timestamp");
 
                     b.ToTable("DiskSamples");
-                });
-
-            modelBuilder.Entity("Track.Data.Models.IdentityEnvVar", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name")
-                        .IsUnique();
-
-                    b.ToTable("IdentityEnvVars");
                 });
 
             modelBuilder.Entity("Track.Data.Models.Role", b =>

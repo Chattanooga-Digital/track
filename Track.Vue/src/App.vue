@@ -45,16 +45,32 @@ async function logout() {
     <template v-else>
       <v-app-bar density="compact" color="surface">
         <v-app-bar-title class="font-weight-bold">
-          <img src="/logo.svg" alt="Track" height="24" class="mr-2" style="vertical-align: middle" />
+          <img
+            src="/logo.svg"
+            alt="Track"
+            height="24"
+            class="mr-2"
+            style="vertical-align: middle"
+          />
           Track
         </v-app-bar-title>
         <template #append>
-          <v-btn to="/" variant="text" size="small" prepend-icon="mdi-view-dashboard">Dashboard</v-btn>
-          <v-btn to="/billing" variant="text" size="small" prepend-icon="mdi-cash-multiple">Billing</v-btn>
-          <v-btn to="/customers" variant="text" size="small" prepend-icon="mdi-account-group">Customers</v-btn>
+          <v-btn to="/" variant="text" size="small" prepend-icon="mdi-view-dashboard"
+            >Dashboard</v-btn
+          >
+          <v-btn to="/billing" variant="text" size="small" prepend-icon="mdi-cash-multiple"
+            >Billing</v-btn
+          >
+          <v-btn to="/customers" variant="text" size="small" prepend-icon="mdi-account-group"
+            >Customers</v-btn
+          >
           <v-btn to="/stacks" variant="text" size="small" prepend-icon="mdi-layers">Stacks</v-btn>
-          <v-btn to="/agents" variant="text" size="small" prepend-icon="mdi-server-network">Agents</v-btn>
-          <v-btn to="/unidentified" variant="text" size="small" prepend-icon="mdi-help-network">Unidentified</v-btn>
+          <v-btn to="/agents" variant="text" size="small" prepend-icon="mdi-server-network"
+            >Agents</v-btn
+          >
+          <v-btn to="/unidentified" variant="text" size="small" prepend-icon="mdi-help-network"
+            >Unidentified</v-btn
+          >
 
           <v-chip
             size="small"
@@ -62,7 +78,10 @@ async function logout() {
             variant="flat"
             class="ml-3"
           >
-            <v-icon start :icon="snapshotStore.connected ? 'mdi-lan-connect' : 'mdi-lan-disconnect'" />
+            <v-icon
+              start
+              :icon="snapshotStore.connected ? 'mdi-lan-connect' : 'mdi-lan-disconnect'"
+            />
             {{ snapshotStore.connected ? 'Live' : 'Reconnecting' }}
           </v-chip>
 

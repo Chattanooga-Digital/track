@@ -61,6 +61,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<CurrentStateHolder>();
         services.AddSingleton<ContainerInventoryHolder>();
         services.AddSingleton<IdentityEnvVarStore>();
+        services.AddSingleton<Track.Services.S3.S3UsageCollector>();
 
         return services;
     }

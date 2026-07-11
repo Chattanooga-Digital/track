@@ -18,13 +18,17 @@ public record NodeCollection(NodeCapacity Capacity, List<ContainerSample> Sample
 /// <summary>Summed capacity across all online nodes.</summary>
 public record ClusterCapacity(int NodeCount, long CpuCores, long MemoryBytes);
 
+/// <summary>Latest size of one S3 bucket, identified by its source and bucket name.</summary>
+public record BucketUsage(string SourceName, string BucketName, long SizeBytes);
+
 public record CurrentState(
     List<ContainerSample> Samples,
     List<NodeStatus> Nodes,
     ClusterCapacity ClusterCapacity,
     Dictionary<string, NodeCapacity> CapacityByNode,
     Dictionary<string, long> ContainerLayerBytes,
-    Dictionary<string, long> StackVolumeBytes);
+    Dictionary<string, long> StackVolumeBytes,
+    List<BucketUsage> Buckets);
 
 /// <summary>Latest poll results per node, merged on read. Thread-safe.</summary>
 public sealed class CurrentStateHolder
@@ -35,6 +39,7 @@ public sealed class CurrentStateHolder
     private readonly Dictionary<string, NodeCapacity> _capacityByNode = [];
     private readonly Dictionary<string, Dictionary<string, long>> _containerLayerBytesByNode = [];
     private readonly Dictionary<string, Dictionary<string, long>> _stackVolumeBytesByNode = [];
+    private readonly Dictionary<string, Dictionary<string, long>> _bucketBytesBySource = [];
 
     public void SetNodeSamples(string nodeName, NodeCollection collection, DateTime timestamp)
     {
@@ -90,6 +95,20 @@ public sealed class CurrentStateHolder
     }
 
     /// <summary>
+    /// Latest bucket sizes for one S3 source. Kept until the next successful poll of the same source
+    /// rather than expired - an unreachable endpoint doesn't mean the storage went away.
+    /// </summary>
+    public void SetBucketUsage(string sourceName, List<DiskSample> samples)
+    {
+        lock (_lock)
+        {
+            _bucketBytesBySource[sourceName] = samples
+                .Where(s => s.Kind == DiskUsageKind.Bucket)
+                .ToDictionary(s => s.Name, s => s.SizeBytes);
+        }
+    }
+
+    /// <summary>
     /// Mark any node that last reported more than <paramref name="maxAge"/> ago as offline and drop its
     /// stale samples, mirroring <see cref="SetNodeError"/>. Returns the names of the nodes just expired
     /// (empty if none), so the caller can clear their inventory and rebroadcast. Used by the central
@@ -137,9 +156,15 @@ public sealed class CurrentStateHolder
             foreach (var (stackName, bytes) in _stackVolumeBytesByNode.Values.SelectMany(d => d))
                 stackVolumeBytes[stackName] = stackVolumeBytes.GetValueOrDefault(stackName) + bytes;
 
+            var buckets = _bucketBytesBySource
+                .SelectMany(source => source.Value.Select(b => new BucketUsage(source.Key, b.Key, b.Value)))
+                .OrderBy(b => b.SourceName)
+                .ThenBy(b => b.BucketName)
+                .ToList();
+
             return new CurrentState(
                 samples, nodes, clusterCapacity, new Dictionary<string, NodeCapacity>(_capacityByNode),
-                containerLayerBytes, stackVolumeBytes);
+                containerLayerBytes, stackVolumeBytes, buckets);
         }
     }
 }

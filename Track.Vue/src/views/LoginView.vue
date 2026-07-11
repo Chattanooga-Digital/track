@@ -15,8 +15,12 @@ async function submit() {
   try {
     await authStore.login(username.value, password.value)
   } catch (e) {
-    if (typeof e === 'object' && e !== null && 'response' in e
-      && (e as { response?: { status?: number } }).response?.status === 401) {
+    if (
+      typeof e === 'object' &&
+      e !== null &&
+      'response' in e &&
+      (e as { response?: { status?: number } }).response?.status === 401
+    ) {
       error.value = 'Invalid username or password.'
     } else {
       error.value = 'Login failed. Please try again.'

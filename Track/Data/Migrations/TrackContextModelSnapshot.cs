@@ -2,20 +2,17 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Track.Data;
 
 #nullable disable
 
-namespace Track.Migrations
+namespace Track.Data.Migrations
 {
     [DbContext(typeof(TrackContext))]
-    [Migration("20260710230032_InitialCreate")]
-    partial class InitialCreate
+    partial class TrackContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
@@ -117,6 +114,35 @@ namespace Track.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("Track.Data.Models.BucketAssignment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BucketName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourceName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("SourceName", "BucketName")
+                        .IsUnique();
+
+                    b.ToTable("BucketAssignments");
                 });
 
             modelBuilder.Entity("Track.Data.Models.ContainerSample", b =>
@@ -234,6 +260,28 @@ namespace Track.Migrations
                     b.HasIndex("StackName", "Timestamp");
 
                     b.ToTable("DiskSamples");
+                });
+
+            modelBuilder.Entity("Track.Data.Models.IdentityEnvVar", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("IdentityEnvVars");
                 });
 
             modelBuilder.Entity("Track.Data.Models.Role", b =>
@@ -409,6 +457,17 @@ namespace Track.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Track.Data.Models.BucketAssignment", b =>
+                {
+                    b.HasOne("Track.Data.Models.Customer", "Customer")
+                        .WithMany("BucketAssignments")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
             modelBuilder.Entity("Track.Data.Models.StackAssignment", b =>
                 {
                     b.HasOne("Track.Data.Models.Customer", "Customer")
@@ -422,6 +481,8 @@ namespace Track.Migrations
 
             modelBuilder.Entity("Track.Data.Models.Customer", b =>
                 {
+                    b.Navigation("BucketAssignments");
+
                     b.Navigation("StackAssignments");
                 });
 #pragma warning restore 612, 618

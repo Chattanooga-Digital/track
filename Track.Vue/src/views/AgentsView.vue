@@ -23,9 +23,7 @@ async function confirmDelete() {
   }
 }
 
-const sortedNodes = computed(() =>
-  [...nodes.value].sort((a, b) => a.name.localeCompare(b.name)),
-)
+const sortedNodes = computed(() => [...nodes.value].sort((a, b) => a.name.localeCompare(b.name)))
 
 const onlineCount = computed(() => nodes.value.filter((n) => n.online).length)
 
@@ -50,15 +48,15 @@ function absoluteTime(iso: string | null): string {
   <v-container fluid>
     <div class="d-flex align-center mb-4 ga-3 flex-wrap">
       <h1 class="text-h5">Agents</h1>
-      <v-chip size="small" :color="onlineCount === nodes.length ? 'success' : 'warning'" variant="flat">
+      <v-chip
+        size="small"
+        :color="onlineCount === nodes.length ? 'success' : 'warning'"
+        variant="flat"
+      >
         {{ onlineCount }} / {{ nodes.length }} online
       </v-chip>
       <v-spacer />
-      <v-chip
-        size="small"
-        :color="snapshotStore.connected ? 'success' : 'warning'"
-        variant="tonal"
-      >
+      <v-chip size="small" :color="snapshotStore.connected ? 'success' : 'warning'" variant="tonal">
         <v-icon start :icon="snapshotStore.connected ? 'mdi-lan-connect' : 'mdi-lan-disconnect'" />
         {{ snapshotStore.connected ? 'Live' : 'Reconnecting' }}
       </v-chip>
@@ -131,24 +129,31 @@ function absoluteTime(iso: string | null): string {
           </tr>
           <tr v-if="nodes.length === 0">
             <td colspan="9" class="text-center text-medium-emphasis py-6">
-              No agents have reported yet. Deploy an agent (Track__Mode=Agent) pointing at this instance.
+              No agents have reported yet. Deploy an agent (Track__Mode=Agent) pointing at this
+              instance.
             </td>
           </tr>
         </tbody>
       </v-table>
     </v-card>
 
-    <v-dialog :model-value="!!deleteTarget" max-width="440" @update:model-value="deleteTarget = null">
+    <v-dialog
+      :model-value="!!deleteTarget"
+      max-width="440"
+      @update:model-value="deleteTarget = null"
+    >
       <v-card>
         <v-card-title class="text-subtitle-1">Delete agent</v-card-title>
         <v-card-text>
-          Remove <strong>{{ deleteTarget }}</strong> from the roster? This only clears the dead entry. If the
-          agent is still running it will reappear on its next report.
+          Remove <strong>{{ deleteTarget }}</strong> from the roster? This only clears the dead
+          entry. If the agent is still running it will reappear on its next report.
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" :disabled="deleting" @click="deleteTarget = null">Cancel</v-btn>
-          <v-btn color="error" variant="flat" :loading="deleting" @click="confirmDelete">Delete</v-btn>
+          <v-btn color="error" variant="flat" :loading="deleting" @click="confirmDelete"
+            >Delete</v-btn
+          >
         </v-card-actions>
       </v-card>
     </v-dialog>

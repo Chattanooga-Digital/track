@@ -54,7 +54,7 @@ watch([selectedStack, hours], loadHistory)
       <v-spacer />
       <v-select
         v-model="selectedStack"
-        :items="stacks.map(s => s.stackName)"
+        :items="stacks.map((s) => s.stackName)"
         label="Stack"
         density="compact"
         hide-details
@@ -84,7 +84,10 @@ watch([selectedStack, hours], loadHistory)
               @click="selectedStack = stack.stackName"
             >
               <template #prepend>
-                <v-icon :icon="stack.isActive ? 'mdi-layers' : 'mdi-layers-off'" :color="stack.isActive ? 'success' : undefined" />
+                <v-icon
+                  :icon="stack.isActive ? 'mdi-layers' : 'mdi-layers-off'"
+                  :color="stack.isActive ? 'success' : undefined"
+                />
               </template>
               <v-list-item-title>{{ stack.stackName }}</v-list-item-title>
               <v-list-item-subtitle>

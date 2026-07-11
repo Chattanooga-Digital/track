@@ -56,18 +56,24 @@ onMounted(refresh)
     <div class="d-flex align-center mb-4 ga-4 flex-wrap">
       <h1 class="text-h5">Unidentified containers</h1>
       <v-spacer />
-      <v-btn variant="text" size="small" prepend-icon="mdi-refresh" :loading="loading" @click="refresh">
+      <v-btn
+        variant="text"
+        size="small"
+        prepend-icon="mdi-refresh"
+        :loading="loading"
+        @click="refresh"
+      >
         Refresh
       </v-btn>
     </div>
 
     <v-alert type="info" variant="tonal" density="compact" class="mb-4">
-      Standalone containers with no Swarm or Compose stack label are grouped by the value of the first
-      matching environment variable below. Pick an identity variable (e.g. <code>DISCOURSE_HOSTNAME</code>)
-      and its value becomes a stack you can assign to a customer. Only the chosen variable's value is sent
-      to Track; other env values never leave the node. Secret-looking variables (names containing
-      <code>password</code>, <code>secret</code>, <code>token</code>, and similar) are hidden and cannot be
-      used as an identity.
+      Standalone containers with no Swarm or Compose stack label are grouped by the value of the
+      first matching environment variable below. Pick an identity variable (e.g.
+      <code>DISCOURSE_HOSTNAME</code>) and its value becomes a stack you can assign to a customer.
+      Only the chosen variable's value is sent to Track; other env values never leave the node.
+      Secret-looking variables (names containing <code>password</code>, <code>secret</code>,
+      <code>token</code>, and similar) are hidden and cannot be used as an identity.
     </v-alert>
 
     <v-card variant="outlined" class="mb-4">
@@ -100,7 +106,9 @@ onMounted(refresh)
           @keyup.enter="addVar(newVar)"
         >
           <template #append>
-            <v-btn variant="tonal" :disabled="!newVar.trim() || saving" @click="addVar(newVar)">Add</v-btn>
+            <v-btn variant="tonal" :disabled="!newVar.trim() || saving" @click="addVar(newVar)"
+              >Add</v-btn
+            >
           </template>
         </v-text-field>
       </v-card-text>
@@ -131,7 +139,9 @@ onMounted(refresh)
           <tr v-for="c in inventory" :key="c.nodeName + c.containerId">
             <td class="text-medium-emphasis">{{ c.nodeName }}</td>
             <td class="text-truncate" style="max-width: 200px">{{ c.containerName }}</td>
-            <td class="text-medium-emphasis text-truncate" style="max-width: 220px">{{ c.image ?? '—' }}</td>
+            <td class="text-medium-emphasis text-truncate" style="max-width: 220px">
+              {{ c.image ?? '—' }}
+            </td>
             <td>
               <div class="d-flex flex-wrap ga-1 py-1">
                 <v-chip

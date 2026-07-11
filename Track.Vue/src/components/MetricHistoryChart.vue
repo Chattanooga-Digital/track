@@ -34,17 +34,28 @@ const props = defineProps<{
 }>()
 
 const labels = computed(() =>
-  props.buckets.map(b => new Date(b.bucketStart).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
+  props.buckets.map((b) =>
+    new Date(b.bucketStart).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+  ),
 )
 
 const dataset = computed(() => {
   if (props.metric === 'cpu') {
-    return { label: 'CPU %', color: '#42a5f5', values: props.buckets.map(b => b.cpuPercent) }
+    return { label: 'CPU %', color: '#42a5f5', values: props.buckets.map((b) => b.cpuPercent) }
   }
   if (props.metric === 'memory') {
-    return { label: 'Memory', color: '#66bb6a', values: props.buckets.map(b => b.memoryUsedBytes) }
+    return {
+      label: 'Memory',
+      color: '#66bb6a',
+      values: props.buckets.map((b) => b.memoryUsedBytes),
+    }
   }
-  return { label: 'Disk', color: '#ffa726', values: props.buckets.map(b => b.diskBytes ?? null) }
+  return { label: 'Disk', color: '#ffa726', values: props.buckets.map((b) => b.diskBytes ?? null) }
 })
 
 const chartData = computed(() => ({

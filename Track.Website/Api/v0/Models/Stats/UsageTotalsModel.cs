@@ -6,8 +6,11 @@ public class UsageTotalsModel
     public long MemoryUsedBytes { get; set; }
     public long MemoryLimitBytes { get; set; }
 
-    /// <summary>Container writable layers plus stack-labelled volumes.</summary>
+    /// <summary>Container writable layers plus stack-labelled volumes (node-local disk).</summary>
     public long DiskBytes { get; set; }
+
+    /// <summary>S3 bucket storage assigned to this scope. Kept separate from node-local <see cref="DiskBytes"/>.</summary>
+    public long ObjectStorageBytes { get; set; }
 
     /// <summary>Consumed CPU as a share of total cluster cores (0-100).</summary>
     public double CpuPercentOfCluster { get; set; }

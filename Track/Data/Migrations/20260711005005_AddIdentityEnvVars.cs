@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace Track.Migrations
+namespace Track.Data.Migrations
 {
     /// <inheritdoc />
     public partial class AddIdentityEnvVars : Migration

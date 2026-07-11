@@ -8,4 +8,5 @@ public class CustomerGroupModel
     public string? CustomerName { get; set; }
     public UsageTotalsModel Totals { get; set; } = new();
     public List<StackGroupModel> Stacks { get; set; } = [];
+    public List<BucketUsageModel> Buckets { get; set; } = [];
 }

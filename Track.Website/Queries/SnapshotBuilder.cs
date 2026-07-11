@@ -18,12 +18,17 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
         var customers = await _metricsContext.Customers
             .AsNoTracking()
             .Include(c => c.StackAssignments)
+            .Include(c => c.BucketAssignments)
             .OrderBy(c => c.Name)
             .ToListAsync(cancellationToken);
 
         var customerIdByStack = customers
             .SelectMany(c => c.StackAssignments.Select(a => (a.StackName, c.Id)))
             .ToDictionary(x => x.StackName, x => x.Id, StringComparer.OrdinalIgnoreCase);
+
+        var customerIdByBucket = customers
+            .SelectMany(c => c.BucketAssignments.Select(a => (Key: BucketKey(a.SourceName, a.BucketName), c.Id)))
+            .ToDictionary(x => x.Key, x => x.Id, StringComparer.OrdinalIgnoreCase);
 
         var stackGroups = state.Samples
             .GroupBy(s => s.StackName)
@@ -112,7 +117,20 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
             group.Stacks.Add(stack);
         }
 
-        if (unassigned.Stacks.Count > 0)
+        foreach (var bucket in state.Buckets)
+        {
+            var group = customerIdByBucket.TryGetValue(BucketKey(bucket.SourceName, bucket.BucketName), out var customerId)
+                ? groupsByCustomerId[customerId]
+                : unassigned;
+            group.Buckets.Add(new BucketUsageModel
+            {
+                SourceName = bucket.SourceName,
+                BucketName = bucket.BucketName,
+                SizeBytes = bucket.SizeBytes,
+            });
+        }
+
+        if (unassigned.Stacks.Count > 0 || unassigned.Buckets.Count > 0)
             snapshot.Customers.Add(unassigned);
 
         foreach (var group in snapshot.Customers)
@@ -123,6 +141,7 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
                 MemoryUsedBytes = group.Stacks.Sum(s => s.Totals.MemoryUsedBytes),
                 MemoryLimitBytes = group.Stacks.Sum(s => s.Totals.MemoryLimitBytes),
                 DiskBytes = group.Stacks.Sum(s => s.Totals.DiskBytes),
+                ObjectStorageBytes = group.Buckets.Sum(b => b.SizeBytes),
             };
         }
 
@@ -138,11 +157,15 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
             MemoryUsedBytes = snapshot.Customers.Sum(c => c.Totals.MemoryUsedBytes),
             MemoryLimitBytes = snapshot.Customers.Sum(c => c.Totals.MemoryLimitBytes),
             DiskBytes = snapshot.Customers.Sum(c => c.Totals.DiskBytes),
+            ObjectStorageBytes = snapshot.Customers.Sum(c => c.Totals.ObjectStorageBytes),
         };
         ApplyClusterShare(snapshot.Totals, state.ClusterCapacity);
 
         return snapshot;
     }
+
+    /// <summary>Stable composite key for a bucket's (source, name) identity; matched case-insensitively.</summary>
+    private static string BucketKey(string sourceName, string bucketName) => $"{sourceName}\u001f{bucketName}";
 
     /// <summary>
     /// Fills the cluster-share fields. Container CPU percent is expressed per single core
