@@ -74,7 +74,24 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
                 MemoryBytes = state.ClusterCapacity.MemoryBytes,
             },
             Nodes = state.Nodes
-                .Select(n => new NodeStatusModel { Name = n.Name, Online = n.Online, Error = n.Error, LastSeen = n.LastSeen })
+                .Select(n =>
+                {
+                    var nodeSamples = state.Samples.Where(s => s.NodeName == n.Name).ToList();
+                    var capacity = state.CapacityByNode.GetValueOrDefault(n.Name);
+                    return new NodeStatusModel
+                    {
+                        Name = n.Name,
+                        Online = n.Online,
+                        Error = n.Error,
+                        LastSeen = n.LastSeen,
+                        ContainersTracked = nodeSamples.Count,
+                        UnidentifiedContainers = nodeSamples.Count(s => s.StackName is null),
+                        CpuCores = capacity?.CpuCores ?? 0,
+                        MemoryBytes = capacity?.MemoryBytes ?? 0,
+                        CpuPercent = nodeSamples.Sum(s => s.CpuPercent),
+                        MemoryUsedBytes = nodeSamples.Sum(s => s.MemoryUsedBytes),
+                    };
+                })
                 .ToList(),
         };
 

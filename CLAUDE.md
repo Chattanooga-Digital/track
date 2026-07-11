@@ -67,6 +67,9 @@ DockerDiskCollector ──┘   (HTTP + secret)      │                        
 4. **Central — `NodeReaperHostedService`** marks a node offline and drops its stale
    samples once it stops pushing for `Track:NodeOfflineAfterSeconds` (default 45s), then
    rebroadcasts. This replaces the per-poll reachability check the old direct-poll model had.
+   Node state is in-memory (keyed by hostname); the **Agents** UI shows per-node stats and can
+   delete a decommissioned node via `AgentsController` (`DELETE /api/v0/agents/{name}`) — a
+   still-running agent simply reappears on its next push.
 5. **Central — `SamplePruningHostedService`** deletes samples older than `Track:RetentionDays`.
 6. **Central — `SnapshotBuilder`** joins the latest results with the customer/stack
    assignments from SQLite into the customer → stack → container tree the UI renders.

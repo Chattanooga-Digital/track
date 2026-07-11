@@ -6,6 +6,8 @@ improvements, bug fixes, and new features by version.
 ## Releases
 ### 0.3.0 - 2026-07-11
 #### Features
+ - New Agents page listing every connected agent with its status, last-seen time, containers tracked, unidentified count, CPU cores, and live CPU and memory usage
+ - Delete a dead agent from the Agents page to clear a decommissioned node from the roster
  - Group label-less standalone containers (plain docker run, e.g. Discourse) by an environment variable's value, which becomes a stack you can assign to a customer
  - New Unidentified view lists standalone containers with their available environment variable names, so you can pick a grouping identity from the app
  - Identity environment variables are configured centrally and pushed to agents automatically; only the chosen variable's value is sent, container secrets never leave the node

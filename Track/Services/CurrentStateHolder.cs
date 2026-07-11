@@ -22,6 +22,7 @@ public record CurrentState(
     List<ContainerSample> Samples,
     List<NodeStatus> Nodes,
     ClusterCapacity ClusterCapacity,
+    Dictionary<string, NodeCapacity> CapacityByNode,
     Dictionary<string, long> ContainerLayerBytes,
     Dictionary<string, long> StackVolumeBytes);
 
@@ -54,6 +55,22 @@ public sealed class CurrentStateHolder
             _capacityByNode.Remove(nodeName);
             var lastSeen = _nodes.TryGetValue(nodeName, out var previous) ? previous.LastSeen : null;
             _nodes[nodeName] = new NodeStatus(nodeName, false, error, lastSeen);
+        }
+    }
+
+    /// <summary>
+    /// Forget a node entirely (a decommissioned agent). Live-state only; a still-running agent reappears on
+    /// its next push. Historical samples in SQLite are left for retention pruning.
+    /// </summary>
+    public void RemoveNode(string nodeName)
+    {
+        lock (_lock)
+        {
+            _samplesByNode.Remove(nodeName);
+            _capacityByNode.Remove(nodeName);
+            _containerLayerBytesByNode.Remove(nodeName);
+            _stackVolumeBytesByNode.Remove(nodeName);
+            _nodes.Remove(nodeName);
         }
     }
 
@@ -120,7 +137,9 @@ public sealed class CurrentStateHolder
             foreach (var (stackName, bytes) in _stackVolumeBytesByNode.Values.SelectMany(d => d))
                 stackVolumeBytes[stackName] = stackVolumeBytes.GetValueOrDefault(stackName) + bytes;
 
-            return new CurrentState(samples, nodes, clusterCapacity, containerLayerBytes, stackVolumeBytes);
+            return new CurrentState(
+                samples, nodes, clusterCapacity, new Dictionary<string, NodeCapacity>(_capacityByNode),
+                containerLayerBytes, stackVolumeBytes);
         }
     }
 }

@@ -45,6 +45,12 @@ export interface NodeStatusDto {
   online: boolean
   error: string | null
   lastSeen: string | null
+  containersTracked: number
+  unidentifiedContainers: number
+  cpuCores: number
+  memoryBytes: number
+  cpuPercent: number
+  memoryUsedBytes: number
 }
 
 export interface SnapshotDto {

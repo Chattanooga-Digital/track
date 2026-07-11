@@ -29,6 +29,11 @@ const router = createRouter({
       name: 'unidentified',
       component: () => import('@/views/UnidentifiedView.vue'),
     },
+    {
+      path: '/agents',
+      name: 'agents',
+      component: () => import('@/views/AgentsView.vue'),
+    },
   ],
 })
 
