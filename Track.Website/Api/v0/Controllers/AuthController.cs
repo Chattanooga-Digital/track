@@ -22,14 +22,16 @@ public class AuthController(
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginModel model)
     {
+        // A disabled account looks like a bad login; don't reveal that the username exists.
+        var user = await UserManager.FindByNameAsync(model.Username);
+        if (user is null || user.Disabled)
+            return Unauthorized();
+
         var result = await SignInManager.PasswordSignInAsync(
-            model.Username, model.Password, model.RememberMe ?? true, lockoutOnFailure: true);
+            user, model.Password, model.RememberMe ?? true, lockoutOnFailure: true);
 
         if (result.Succeeded)
-        {
-            var user = await UserManager.FindByNameAsync(model.Username);
-            return user is null ? Unauthorized() : Ok(new CurrentUserModel { Username = user.UserName! });
-        }
+            return Ok(await BuildCurrentUserAsync(user));
 
         if (result.IsLockedOut)
             return BadRequest(new { error = "AccountLockedOut" });
@@ -53,6 +55,35 @@ public class AuthController(
         if (user is null)
             return Unauthorized();
 
-        return Ok(new CurrentUserModel { Username = user.UserName! });
+        if (user.Disabled)
+        {
+            await SignInManager.SignOutAsync();
+            return Unauthorized();
+        }
+
+        return Ok(await BuildCurrentUserAsync(user));
     }
+
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordModel model)
+    {
+        var user = await UserManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized();
+
+        var result = await UserManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
+        if (!result.Succeeded)
+            return BadRequest(string.Join(" ", result.Errors.Select(e => e.Description)));
+
+        // The password change rotated the security stamp; reissue the cookie so this session survives.
+        await SignInManager.RefreshSignInAsync(user);
+        return Ok();
+    }
+
+    private async Task<CurrentUserModel> BuildCurrentUserAsync(User user) => new()
+    {
+        Username = user.UserName!,
+        IsAdministrator = await UserManager.IsInRoleAsync(user, Role.Administrator),
+    };
 }

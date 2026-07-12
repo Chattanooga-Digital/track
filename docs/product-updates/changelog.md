@@ -4,6 +4,17 @@ Welcome to the Track changelog. Here you'll find a history of product updates,
 improvements, bug fixes, and new features by version.
 
 ## Releases
+### 0.5.1 - 2026-07-12
+#### Bug Fixes
+ - Saving an S3 source now polls it right away, so its buckets are assignable to customers immediately instead of after the next poll cycle (up to 15 minutes)
+
+#### Features
+ - Added a "Refresh usage" button on the Storage page to poll every enabled S3 source on demand
+ - New Users page (administrators only) to create, edit, disable, and delete accounts, grant or revoke administrator access, and set another user's password
+ - Change your own password from the account menu
+ - Disabled accounts cannot sign in, and disabling, demoting, or resetting a password signs that user out of existing sessions
+ - Guards keep the app reachable: you cannot disable, demote, or delete your own account, and the last active administrator cannot be removed
+
 ### 0.5.0 - 2026-07-11
 #### Features
  - Manage S3 sources live from the new Storage page: add, edit, disable, delete, and test a connection without a restart

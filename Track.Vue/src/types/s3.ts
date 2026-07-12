@@ -28,3 +28,7 @@ export interface S3SourceTestResultDto {
   bucketCount: number
   error: string | null
 }
+
+export interface S3SourceRefreshResultDto {
+  bucketCount: number
+}

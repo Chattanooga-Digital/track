@@ -398,6 +398,9 @@ namespace Track.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Disabled")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("DisplayName")
                         .HasColumnType("TEXT");
 

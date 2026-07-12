@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useSnapshotStore } from '@/stores/snapshotStore'
 import { useAuthStore } from '@/stores/authStore'
 import LoginView from '@/views/LoginView.vue'
+import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 
 const snapshotStore = useSnapshotStore()
 const authStore = useAuthStore()
+const changePasswordOpen = ref(false)
 
 onMounted(() => {
   authStore.initialize()
@@ -74,6 +76,14 @@ async function logout() {
           <v-btn to="/unidentified" variant="text" size="small" prepend-icon="mdi-help-network"
             >Unidentified</v-btn
           >
+          <v-btn
+            v-if="authStore.user?.isAdministrator"
+            to="/users"
+            variant="text"
+            size="small"
+            prepend-icon="mdi-account-multiple"
+            >Users</v-btn
+          >
 
           <v-chip
             size="small"
@@ -99,11 +109,18 @@ async function logout() {
                 </v-list-item-title>
               </v-list-item>
               <v-divider />
+              <v-list-item
+                prepend-icon="mdi-form-textbox-password"
+                title="Change password"
+                @click="changePasswordOpen = true"
+              />
               <v-list-item prepend-icon="mdi-logout" title="Sign out" @click="logout" />
             </v-list>
           </v-menu>
         </template>
       </v-app-bar>
+
+      <ChangePasswordDialog v-model="changePasswordOpen" />
 
       <v-main>
         <v-alert

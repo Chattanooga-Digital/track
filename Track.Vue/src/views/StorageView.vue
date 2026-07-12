@@ -7,10 +7,13 @@ import {
   updateS3Source,
   deleteS3Source,
   testS3Source,
+  refreshS3Usage,
 } from '@/api/s3SourcesApi'
 
 const sources = ref<S3SourceDto[]>([])
 const loading = ref(true)
+const polling = ref(false)
+const pollResult = ref<string | null>(null)
 
 const dialog = ref(false)
 const editing = ref<S3SourceDto | null>(null)
@@ -46,6 +49,19 @@ async function refresh() {
 }
 
 onMounted(refresh)
+
+// Sources are otherwise only polled on the central's slow S3 interval, so buckets added since the last
+// cycle would not be assignable until it comes around again.
+async function pollNow() {
+  polling.value = true
+  pollResult.value = null
+  try {
+    const result = await refreshS3Usage()
+    pollResult.value = `Polled ${result.bucketCount} bucket(s) across enabled sources.`
+  } finally {
+    polling.value = false
+  }
+}
 
 function openCreate() {
   editing.value = null
@@ -125,8 +141,30 @@ const canSave = () =>
     <div class="d-flex align-center mb-4">
       <h1 class="text-h5">Object Storage Sources</h1>
       <v-spacer />
+      <v-btn
+        variant="text"
+        prepend-icon="mdi-refresh"
+        :loading="polling"
+        :disabled="sources.length === 0"
+        class="mr-2"
+        @click="pollNow"
+      >
+        Refresh usage
+      </v-btn>
       <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreate">New Source</v-btn>
     </div>
+
+    <v-alert
+      v-if="pollResult"
+      type="success"
+      variant="tonal"
+      density="compact"
+      closable
+      class="mb-4"
+      @click:close="pollResult = null"
+    >
+      {{ pollResult }}
+    </v-alert>
 
     <v-progress-linear v-if="loading" indeterminate />
 

@@ -10,6 +10,10 @@ export async function logout(): Promise<void> {
   await http.post('/auth/logout')
 }
 
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await http.post('/auth/change-password', { currentPassword, newPassword })
+}
+
 /** Returns the current user, or null if not authenticated (401). */
 export async function getCurrentUser(): Promise<CurrentUserDto | null> {
   try {

@@ -1,5 +1,6 @@
 export interface CurrentUserDto {
   username: string
+  isAdministrator: boolean
 }
 
 export interface LoginDto {

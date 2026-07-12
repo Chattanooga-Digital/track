@@ -36,6 +36,10 @@ public static class ServiceCollectionExtensions
             .AddEntityFrameworkStores<TrackContext>()
             .AddDefaultTokenProviders();
 
+        // How quickly a disable / demotion / password reset cuts existing sessions: the cookie's
+        // security stamp is re-checked (and role claims refreshed) at most this often.
+        services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.FromMinutes(5));
+
         // This is an API: answer with status codes rather than redirecting to a login page.
         services.ConfigureApplicationCookie(cookie =>
         {

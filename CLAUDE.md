@@ -144,12 +144,18 @@ storage (and bind mounts) are invisible to the agents. Object storage is therefo
   - The S3 client sets `RequestChecksumCalculation`/`ResponseChecksumValidation` to
     `WHEN_REQUIRED`. AWSSDK v4 defaults to `WHEN_SUPPORTED`, whose flexible-checksum
     headers make MinIO/RustFS reject requests as `SignatureDoesNotMatch`.
-- `S3UsageHostedService` (central-only) runs every `Track:S3PollIntervalSeconds`
-  (default 900s): loads enabled sources from the DB, reconciles the live state
-  (`RetainBucketSources` drops deleted/disabled sources), polls each (per-source failures
-  isolated; last good reading kept), writes `DiskSample` rows of `DiskUsageKind.Bucket`
-  (`NodeName` = source, `Name` = bucket), merges into `CurrentStateHolder` via
-  `SetBucketUsage`, and rebroadcasts.
+- The poll itself lives in `S3UsageRefresher` (scoped, `Track.Website/Services/`): loads enabled
+  sources from the DB, reconciles the live state (`RetainBucketSources` drops deleted/disabled
+  sources), polls each (per-source failures isolated; last good reading kept), writes `DiskSample`
+  rows of `DiskUsageKind.Bucket` (`NodeName` = source, `Name` = bucket), merges into
+  `CurrentStateHolder` via `SetBucketUsage`, and rebroadcasts. Passing a source name polls just
+  that one (no reconcile — it knows nothing about the sources it skipped).
+- `S3UsageHostedService` (central-only) is just a timer over it, running every
+  `Track:S3PollIntervalSeconds` (default 900s). Because that interval is long, the refresher is
+  also called on demand: `S3SourcesController` polls a source right after create/update (so its
+  buckets are assignable immediately, not after the next cycle), and `POST /s3-sources/refresh`
+  polls every enabled source from the Storage page's "Refresh usage" button. `POST /s3-sources/test`
+  only proves reachability — it does not populate buckets.
 - Buckets are **first-class**, not synthetic stacks. A `BucketAssignment` row
   (`SourceName` + `BucketName` → `CustomerId`, unique per bucket) maps a bucket to the
   customer billed for it, mirroring `StackAssignment`. `BucketsController`

@@ -51,6 +51,7 @@ builder.Services
     // AddTrack wires up Identity (AddIdentity + cookie configuration); see Track/DependencyInjection.
     .AddTrack(builder.Configuration)
     .AddScoped<SnapshotBuilder>()
+    .AddScoped<S3UsageRefresher>()
     .AddAuthorization()
     .AddHostedService<NodeReaperHostedService>()
     .AddHostedService<SamplePruningHostedService>()

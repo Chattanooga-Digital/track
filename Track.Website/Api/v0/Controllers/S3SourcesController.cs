@@ -3,19 +3,17 @@ using Track.Data.Models;
 using Track.Services;
 using Track.Services.S3;
 using Track.Website.Api.v0.Models.S3;
-using Track.Website.Hubs;
-using Track.Website.Queries;
+using Track.Website.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace Track.Website.Api.v0.Controllers;
 
 /// <summary>
 /// Manages the S3 sources the central polls for bucket sizes. Secret keys are stored encrypted and never
-/// returned. Changes are picked up by the polling service on its next cycle; deletes drop live buckets
-/// immediately.
+/// returned. Saving a source polls it right away so its buckets are assignable without waiting for the slow
+/// poll interval; disabling or deleting one drops its live buckets immediately.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -26,16 +24,14 @@ public class S3SourcesController(
     S3SourceSecretProtector secretProtector,
     S3UsageCollector collector,
     CurrentStateHolder currentStateHolder,
-    SnapshotBuilder snapshotBuilder,
-    IHubContext<TrackHub> hubContext) : ControllerBase
+    S3UsageRefresher refresher) : ControllerBase
 {
     protected ILogger<S3SourcesController> Logger { get; } = logger;
     protected TrackContext TrackContext { get; } = metricsContext;
     protected S3SourceSecretProtector SecretProtector { get; } = secretProtector;
     protected S3UsageCollector Collector { get; } = collector;
     protected CurrentStateHolder CurrentStateHolder { get; } = currentStateHolder;
-    protected SnapshotBuilder SnapshotBuilder { get; } = snapshotBuilder;
-    protected IHubContext<TrackHub> HubContext { get; } = hubContext;
+    protected S3UsageRefresher Refresher { get; } = refresher;
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
@@ -88,6 +84,10 @@ public class S3SourcesController(
         TrackContext.S3Sources.Add(source);
         await TrackContext.SaveChangesAsync(cancellationToken);
 
+        // Poll it now: otherwise its buckets stay invisible (and unassignable) until the next slow cycle.
+        if (source.Enabled)
+            await Refresher.RefreshAsync(source.Name, cancellationToken);
+
         return Ok(new S3SourceModel
         {
             Id = source.Id,
@@ -124,11 +124,16 @@ public class S3SourcesController(
 
         await TrackContext.SaveChangesAsync(cancellationToken);
 
-        // A disabled source stops contributing immediately.
-        if (!source.Enabled)
+        if (source.Enabled)
         {
+            // Re-poll with the new settings so corrected credentials or endpoints take effect at once.
+            await Refresher.RefreshAsync(source.Name, cancellationToken);
+        }
+        else
+        {
+            // A disabled source stops contributing immediately.
             CurrentStateHolder.RemoveBucketSource(source.Name);
-            await BroadcastAsync(cancellationToken);
+            await Refresher.BroadcastAsync(cancellationToken);
         }
 
         return Ok();
@@ -150,9 +155,17 @@ public class S3SourcesController(
         await TrackContext.SaveChangesAsync(cancellationToken);
 
         CurrentStateHolder.RemoveBucketSource(source.Name);
-        await BroadcastAsync(cancellationToken);
+        await Refresher.BroadcastAsync(cancellationToken);
 
         return Ok();
+    }
+
+    /// <summary>Polls every enabled source now, rather than waiting for the next slow cycle.</summary>
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh(CancellationToken cancellationToken)
+    {
+        var bucketCount = await Refresher.RefreshAsync(cancellationToken: cancellationToken);
+        return Ok(new S3SourceRefreshResultModel { BucketCount = bucketCount });
     }
 
     /// <summary>Tries to reach the source with the supplied settings and reports how many buckets it found.</summary>
@@ -187,11 +200,5 @@ public class S3SourcesController(
         {
             return Ok(new S3SourceTestResultModel { Ok = false, Error = ex.Message });
         }
-    }
-
-    private async Task BroadcastAsync(CancellationToken cancellationToken)
-    {
-        var snapshot = await SnapshotBuilder.BuildAsync(cancellationToken);
-        await HubContext.Clients.All.SendAsync(TrackHub.SnapshotEvent, snapshot, cancellationToken);
     }
 }

@@ -1,5 +1,10 @@
 import { http } from './http'
-import type { S3SourceDto, S3SourceEditDto, S3SourceTestResultDto } from '@/types/s3'
+import type {
+  S3SourceDto,
+  S3SourceEditDto,
+  S3SourceRefreshResultDto,
+  S3SourceTestResultDto,
+} from '@/types/s3'
 
 export async function getS3Sources(): Promise<S3SourceDto[]> {
   const { data } = await http.get<S3SourceDto[]>('/s3-sources')
@@ -17,6 +22,12 @@ export async function updateS3Source(id: number, model: S3SourceEditDto): Promis
 
 export async function deleteS3Source(id: number): Promise<void> {
   await http.delete(`/s3-sources/${id}`)
+}
+
+/** Polls every enabled source now instead of waiting for the central's slow S3 cycle. */
+export async function refreshS3Usage(): Promise<S3SourceRefreshResultDto> {
+  const { data } = await http.post<S3SourceRefreshResultDto>('/s3-sources/refresh')
+  return data
 }
 
 export async function testS3Source(
