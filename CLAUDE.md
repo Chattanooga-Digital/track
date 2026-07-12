@@ -121,6 +121,24 @@ computes, at container-group, stack, customer, and cluster level:
 The `Billing` page ranks customers by blended share and surfaces the unbilled
 (unassigned) remainder.
 
+### Monthly billing history
+
+Past months cannot be reconstructed from raw samples (cluster capacity is in-memory only,
+raw samples are pruned after `Track:RetentionDays`, and stack/bucket assignments change),
+so billing is recorded as it happens. `BillingSampleHostedService` (central-only, every
+`Track:BillingSampleIntervalSeconds`, default 300s) calls `BillingSampleRecorder`, which
+builds the live snapshot and writes one `ClusterCapacitySample` (the tick) plus one
+`BillingSample` per customer group — cluster shares, usage bytes, and the customer
+attribution frozen at record time (`CustomerId` is deliberately not a foreign key, and
+`CustomerName` is denormalized, so history survives customer deletion). Ticks are skipped
+while no nodes are online. Retention is separate and long (`Track:BillingRetentionDays`,
+default 730 days).
+
+`GET /api/v0/stats/billing/months` lists recorded months; `GET /api/v0/stats/billing?month=yyyy-MM`
+returns per-customer averages. Sums divide by the month's total tick count (not the
+customer's own row count), so a customer present for part of a month bills proportionally.
+The Billing page has a period selector: Live (the SignalR snapshot) or any recorded month.
+
 ## S3 Object Storage (Buckets)
 
 Docker's `/system/df` only sees container writable layers and named volumes, so bucket

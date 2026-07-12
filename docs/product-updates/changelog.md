@@ -4,6 +4,12 @@ Welcome to the Track changelog. Here you'll find a history of product updates,
 improvements, bug fixes, and new features by version.
 
 ## Releases
+### 0.6.0 - 2026-07-12
+#### Features
+ - Month-by-month billing: pick a billing period on the Billing page to see each customer's average blended utilization, memory, disk, and object storage for that month, alongside the live view
+ - The central records a billing sample every 5 minutes (configurable via `Track:BillingSampleIntervalSeconds`), freezing cluster capacity and customer assignments as they were at the time
+ - Billing history is kept for 2 years by default (`Track:BillingRetentionDays`), independent of the raw sample retention
+
 ### 0.5.1 - 2026-07-12
 #### Bug Fixes
  - Saving an S3 source now polls it right away, so its buckets are assignable to customers immediately instead of after the next poll cycle (up to 15 minutes)

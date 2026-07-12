@@ -70,6 +70,33 @@ export interface SnapshotDto {
   customers: CustomerGroupDto[]
 }
 
+export interface BillingCapacityDto {
+  nodeCount: number
+  cpuCores: number
+  memoryBytes: number
+}
+
+export interface BillingCustomerDto {
+  customerId: number | null
+  customerName: string | null
+  cpuPercent: number
+  memoryUsedBytes: number
+  diskBytes: number
+  objectStorageBytes: number
+  cpuPercentOfCluster: number
+  memoryPercentOfCluster: number
+  blendedPercentOfCluster: number
+}
+
+export interface BillingMonthDto {
+  month: string
+  from: string
+  to: string
+  sampleCount: number
+  capacity: BillingCapacityDto
+  customers: BillingCustomerDto[]
+}
+
 export interface HistoryBucketDto {
   bucketStart: string
   cpuPercent: number

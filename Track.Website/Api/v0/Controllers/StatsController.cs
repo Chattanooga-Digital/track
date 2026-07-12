@@ -1,5 +1,7 @@
+using System.Globalization;
 using Track.Data;
 using Track.Enums;
+using Track.Website.Api.v0.Models.Stats;
 using Track.Website.Queries;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -65,6 +67,87 @@ public class StatsController(
         var objectStoragePoints = await ObjectStoragePointsAsync(customerId, stackName, from, cancellationToken);
 
         return Ok(HistoryAggregator.Aggregate(usagePoints, diskPoints, objectStoragePoints, from, to));
+    }
+
+    /// <summary>Months (yyyy-MM, newest first) that have at least one billing tick recorded.</summary>
+    [HttpGet("billing/months")]
+    public async Task<IActionResult> GetBillingMonths(CancellationToken cancellationToken)
+    {
+        var months = await TrackContext.ClusterCapacitySamples.AsNoTracking()
+            .Select(s => new { s.Timestamp.Year, s.Timestamp.Month })
+            .Distinct()
+            .OrderByDescending(m => m.Year)
+            .ThenByDescending(m => m.Month)
+            .ToListAsync(cancellationToken);
+
+        return Ok(months.Select(m => $"{m.Year:D4}-{m.Month:D2}").ToList());
+    }
+
+    /// <summary>A month's billing figures, averaged over its recorded billing ticks.</summary>
+    [HttpGet("billing")]
+    public async Task<IActionResult> GetBillingMonth([FromQuery] string month, CancellationToken cancellationToken)
+    {
+        if (!DateTime.TryParseExact(month, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            return BadRequest(new { error = "month must be in yyyy-MM form" });
+
+        var from = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
+        var to = from.AddMonths(1);
+
+        var capacityQuery = TrackContext.ClusterCapacitySamples.AsNoTracking()
+            .Where(s => s.Timestamp >= from && s.Timestamp < to);
+        var sampleCount = await capacityQuery.CountAsync(cancellationToken);
+
+        var model = new BillingMonthModel { Month = month, From = from, To = to, SampleCount = sampleCount };
+        if (sampleCount == 0)
+            return Ok(model);
+
+        model.Capacity = new BillingCapacityModel
+        {
+            NodeCount = await capacityQuery.AverageAsync(s => (double)s.NodeCount, cancellationToken),
+            CpuCores = await capacityQuery.AverageAsync(s => (double)s.CpuCores, cancellationToken),
+            MemoryBytes = await capacityQuery.AverageAsync(s => (double)s.MemoryBytes, cancellationToken),
+        };
+
+        var groups = await TrackContext.BillingSamples.AsNoTracking()
+            .Where(s => s.Timestamp >= from && s.Timestamp < to)
+            .GroupBy(s => s.CustomerId)
+            .Select(g => new
+            {
+                CustomerId = g.Key,
+                CustomerName = g.Max(s => s.CustomerName),
+                CpuPercent = g.Sum(s => s.CpuPercent),
+                MemoryUsedBytes = g.Sum(s => (double)s.MemoryUsedBytes),
+                DiskBytes = g.Sum(s => (double)s.DiskBytes),
+                ObjectStorageBytes = g.Sum(s => (double)s.ObjectStorageBytes),
+                CpuPercentOfCluster = g.Sum(s => s.CpuPercentOfCluster),
+                MemoryPercentOfCluster = g.Sum(s => s.MemoryPercentOfCluster),
+                BlendedPercentOfCluster = g.Sum(s => s.BlendedPercentOfCluster),
+            })
+            .ToListAsync(cancellationToken);
+
+        // Prefer the customer's current name over the recorded one; the stored name only serves deleted customers.
+        var currentNames = await TrackContext.Customers.AsNoTracking()
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+
+        // Sums divide by the month's total tick count, not the customer's own row count, so
+        // presence for part of the month scales the bill down proportionally.
+        model.Customers = groups
+            .Select(g => new BillingCustomerModel
+            {
+                CustomerId = g.CustomerId,
+                CustomerName = g.CustomerId is int id && currentNames.TryGetValue(id, out var name) ? name : g.CustomerName,
+                CpuPercent = g.CpuPercent / sampleCount,
+                MemoryUsedBytes = g.MemoryUsedBytes / sampleCount,
+                DiskBytes = g.DiskBytes / sampleCount,
+                ObjectStorageBytes = g.ObjectStorageBytes / sampleCount,
+                CpuPercentOfCluster = g.CpuPercentOfCluster / sampleCount,
+                MemoryPercentOfCluster = g.MemoryPercentOfCluster / sampleCount,
+                BlendedPercentOfCluster = g.BlendedPercentOfCluster / sampleCount,
+            })
+            .OrderByDescending(c => c.BlendedPercentOfCluster)
+            .ToList();
+
+        return Ok(model);
     }
 
     /// <summary>

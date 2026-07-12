@@ -52,10 +52,12 @@ builder.Services
     .AddTrack(builder.Configuration)
     .AddScoped<SnapshotBuilder>()
     .AddScoped<S3UsageRefresher>()
+    .AddScoped<BillingSampleRecorder>()
     .AddAuthorization()
     .AddHostedService<NodeReaperHostedService>()
     .AddHostedService<SamplePruningHostedService>()
-    .AddHostedService<S3UsageHostedService>();
+    .AddHostedService<S3UsageHostedService>()
+    .AddHostedService<BillingSampleHostedService>();
 
 var app = builder.Build();
 

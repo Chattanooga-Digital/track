@@ -116,6 +116,52 @@ namespace Track.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Track.Data.Models.BillingSample", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("BlendedPercentOfCluster")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("CpuPercent")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("CpuPercentOfCluster")
+                        .HasColumnType("REAL");
+
+                    b.Property<int?>("CustomerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CustomerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("DiskBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("MemoryPercentOfCluster")
+                        .HasColumnType("REAL");
+
+                    b.Property<long>("MemoryUsedBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ObjectStorageBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Timestamp");
+
+                    b.HasIndex("CustomerId", "Timestamp");
+
+                    b.ToTable("BillingSamples");
+                });
+
             modelBuilder.Entity("Track.Data.Models.BucketAssignment", b =>
                 {
                     b.Property<int>("Id")
@@ -143,6 +189,31 @@ namespace Track.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("BucketAssignments");
+                });
+
+            modelBuilder.Entity("Track.Data.Models.ClusterCapacitySample", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CpuCores")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MemoryBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("NodeCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Timestamp");
+
+                    b.ToTable("ClusterCapacitySamples");
                 });
 
             modelBuilder.Entity("Track.Data.Models.ContainerSample", b =>

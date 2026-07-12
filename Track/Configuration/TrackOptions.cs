@@ -96,6 +96,18 @@ public class TrackOptions
     public int DiskPollIntervalSeconds { get; set; } = 300;
     public int RetentionDays { get; set; } = 14;
 
+    /// <summary>
+    /// How often the central records a per-customer billing sample (cluster shares frozen at
+    /// record time). Monthly billing is the average of these ticks.
+    /// </summary>
+    public int BillingSampleIntervalSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// How long billing samples are kept. Much longer than <see cref="RetentionDays"/> - these
+    /// are the invoicing record, one row per customer per billing tick.
+    /// </summary>
+    public int BillingRetentionDays { get; set; } = 730;
+
     /// <summary>S3-compatible endpoints to poll for bucket sizes (Central mode only).</summary>
     public List<S3SourceOptions> S3Sources { get; set; } = [];
 

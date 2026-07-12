@@ -52,9 +52,18 @@ public sealed class SamplePruningHostedService(
             .Where(s => s.Timestamp < cutoff)
             .ExecuteDeleteAsync(cancellationToken);
 
-        if (containerSamples > 0 || diskSamples > 0)
+        // Billing ticks are the invoicing record, so they live on their own (much longer) retention.
+        var billingCutoff = DateTime.UtcNow.AddDays(-Math.Max(1, _options.Value.BillingRetentionDays));
+        var billingSamples = await metricsContext.BillingSamples
+            .Where(s => s.Timestamp < billingCutoff)
+            .ExecuteDeleteAsync(cancellationToken);
+        var capacitySamples = await metricsContext.ClusterCapacitySamples
+            .Where(s => s.Timestamp < billingCutoff)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        if (containerSamples > 0 || diskSamples > 0 || billingSamples > 0 || capacitySamples > 0)
             _logger.LogInformation(
-                "Pruned {ContainerSamples} container samples and {DiskSamples} disk samples older than {Cutoff}",
-                containerSamples, diskSamples, cutoff);
+                "Pruned {ContainerSamples} container samples, {DiskSamples} disk samples, and {BillingSamples} billing samples older than retention",
+                containerSamples, diskSamples, billingSamples + capacitySamples);
     }
 }
