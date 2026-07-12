@@ -154,6 +154,9 @@ function toggleStack(key: string) {
           <v-icon icon="mdi-database" size="small" class="ms-8" />
           <span class="font-weight-medium">{{ bucket.bucketName }}</span>
           <span class="text-caption text-medium-emphasis">{{ bucket.sourceName }}</span>
+          <v-chip v-if="bucket.objectCount > 0" size="x-small" variant="tonal">
+            {{ bucket.objectCount.toLocaleString() }} objects
+          </v-chip>
           <v-spacer />
           <div class="metric text-right">
             <div class="text-caption text-medium-emphasis">Object storage</div>

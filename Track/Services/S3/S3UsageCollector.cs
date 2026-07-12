@@ -1,42 +1,56 @@
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
-using Track.Configuration;
-using Track.Data.Models;
 using Track.Enums;
+using Track.Services;
 using Microsoft.Extensions.Logging;
 
 namespace Track.Services.S3;
 
+/// <summary>A source to poll, with its secret already decrypted. Built by the hosted service from the DB.</summary>
+public sealed record S3PollTarget(
+    string Name, string Endpoint, S3SourceKind Kind, string AccessKey, string SecretKey, string Region);
+
 /// <summary>
-/// Polls one S3-compatible endpoint (MinIO, AWS, ...) and sizes every bucket by walking its object
-/// listing. Each bucket becomes a <see cref="DiskUsageKind.Bucket"/> sample (NodeName = source,
-/// Name = bucket) that is assigned to a customer through <see cref="Data.Models.BucketAssignment"/>.
+/// Sizes the buckets of one S3 source. MinIO/RustFS sources use the admin data-usage API (one request,
+/// exact size + object count from the scanner); generic S3 sources fall back to walking ListObjectsV2.
+/// Returns per-bucket <see cref="BucketUsage"/> for the central to assign to customers.
 /// </summary>
-public sealed class S3UsageCollector(ILogger<S3UsageCollector> logger)
+public sealed class S3UsageCollector(MinioAdminClient minioAdminClient, ILogger<S3UsageCollector> logger)
 {
+    private readonly MinioAdminClient _minioAdminClient = minioAdminClient;
     private readonly ILogger<S3UsageCollector> _logger = logger;
 
-    public async Task<List<DiskSample>> CollectAsync(
-        S3SourceOptions source, DateTime timestamp, CancellationToken cancellationToken = default)
+    public async Task<List<BucketUsage>> CollectAsync(S3PollTarget source, CancellationToken cancellationToken = default)
     {
-        using var client = CreateClient(source);
+        return source.Kind == S3SourceKind.Minio
+            ? await CollectViaAdminAsync(source, cancellationToken)
+            : await CollectViaListingAsync(source, cancellationToken);
+    }
+
+    private async Task<List<BucketUsage>> CollectViaAdminAsync(S3PollTarget source, CancellationToken cancellationToken)
+    {
+        var usage = await _minioAdminClient.GetBucketUsageAsync(
+            source.Endpoint, source.AccessKey, source.SecretKey, source.Region, cancellationToken);
+
+        return usage
+            .Select(b => new BucketUsage(source.Name, b.BucketName, b.SizeBytes, b.ObjectCount))
+            .ToList();
+    }
+
+    private async Task<List<BucketUsage>> CollectViaListingAsync(S3PollTarget source, CancellationToken cancellationToken)
+    {
+        using var client = CreateS3Client(source);
         var buckets = await client.ListBucketsAsync(cancellationToken);
-        var samples = new List<DiskSample>();
+        var readings = new List<BucketUsage>();
 
         foreach (var bucket in buckets.Buckets ?? [])
         {
             // One bad bucket (permissions, deletion mid-poll) must not blank the rest of the source.
             try
             {
-                samples.Add(new DiskSample
-                {
-                    Timestamp = timestamp,
-                    NodeName = source.Name!,
-                    Kind = DiskUsageKind.Bucket,
-                    Name = bucket.BucketName,
-                    SizeBytes = await SizeBucketAsync(client, bucket.BucketName, cancellationToken),
-                });
+                var (size, count) = await SizeBucketAsync(client, bucket.BucketName, cancellationToken);
+                readings.Add(new BucketUsage(source.Name, bucket.BucketName, size, count));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -45,34 +59,44 @@ public sealed class S3UsageCollector(ILogger<S3UsageCollector> logger)
             }
         }
 
-        return samples;
+        return readings;
     }
 
-    private static async Task<long> SizeBucketAsync(
+    private static async Task<(long Size, long Count)> SizeBucketAsync(
         IAmazonS3 client, string bucketName, CancellationToken cancellationToken)
     {
         long size = 0;
+        long count = 0;
         var request = new ListObjectsV2Request { BucketName = bucketName };
 
         ListObjectsV2Response response;
         do
         {
             response = await client.ListObjectsV2Async(request, cancellationToken);
-            size += response.S3Objects?.Sum(o => o.Size ?? 0) ?? 0;
+            foreach (var obj in response.S3Objects ?? [])
+            {
+                size += obj.Size ?? 0;
+                count++;
+            }
             request.ContinuationToken = response.NextContinuationToken;
         } while (response.IsTruncated == true);
 
-        return size;
+        return (size, count);
     }
 
-    private static AmazonS3Client CreateClient(S3SourceOptions source)
+    private static AmazonS3Client CreateS3Client(S3PollTarget source)
     {
         var config = new AmazonS3Config
         {
             ServiceURL = source.Endpoint,
-            // MinIO serves buckets on the path, not a per-bucket subdomain.
+            // MinIO/RustFS serve buckets on the path, not a per-bucket subdomain.
             ForcePathStyle = true,
             AuthenticationRegion = source.Region,
+            // AWSSDK v4 defaults to adding flexible-checksum headers, which MinIO/RustFS fold into
+            // signature verification differently than AWS and reject as SignatureDoesNotMatch. Only send
+            // checksums when an operation actually requires them.
+            RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+            ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED,
         };
 
         return new AmazonS3Client(new BasicAWSCredentials(source.AccessKey, source.SecretKey), config);

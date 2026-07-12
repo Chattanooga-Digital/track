@@ -127,6 +127,7 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
                 SourceName = bucket.SourceName,
                 BucketName = bucket.BucketName,
                 SizeBytes = bucket.SizeBytes,
+                ObjectCount = bucket.ObjectCount,
             });
         }
 

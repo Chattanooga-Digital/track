@@ -4,6 +4,19 @@ Welcome to the Track changelog. Here you'll find a history of product updates,
 improvements, bug fixes, and new features by version.
 
 ## Releases
+### 0.5.0 - 2026-07-11
+#### Features
+ - Manage S3 sources live from the new Storage page: add, edit, disable, delete, and test a connection without a restart
+ - MinIO and RustFS sources are sized in one call via the admin data-usage API, reporting each bucket's size and object count without listing every object
+ - Bucket object counts are shown on the dashboard
+ - Secret keys are stored encrypted and never sent back to the browser
+
+#### Bug Fixes
+ - Fixed "SignatureDoesNotMatch" errors against MinIO and RustFS caused by the AWS SDK v4 default of adding checksum headers
+
+#### Changes
+ - S3 sources now live in the database and are managed from the UI; any Track:S3Sources config is imported once on first startup
+
 ### 0.4.0 - 2026-07-11
 #### Features
  - Track S3 object storage: the central polls configured S3-compatible endpoints (MinIO, AWS) for per-bucket sizes

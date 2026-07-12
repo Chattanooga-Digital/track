@@ -26,6 +26,7 @@ export interface BucketUsageDto {
   sourceName: string
   bucketName: string
   sizeBytes: number
+  objectCount: number
 }
 
 export interface ClusterCapacityDto {

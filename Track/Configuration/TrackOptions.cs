@@ -42,11 +42,14 @@ public class IngestOptions
 /// </summary>
 public class S3SourceOptions
 {
-    /// <summary>Short identifier for this source; prefixes the synthetic stack names, so keep it stable.</summary>
+    /// <summary>Short identifier for this source; used as the bucket's source in assignments, so keep it stable.</summary>
     public string? Name { get; set; }
 
     /// <summary>Service URL, e.g. http://minio:9000. Path-style addressing is always used (MinIO default).</summary>
     public string? Endpoint { get; set; }
+
+    /// <summary>How buckets are sized. Defaults to MinIO admin data-usage (one call, size + count).</summary>
+    public Enums.S3SourceKind Kind { get; set; } = Enums.S3SourceKind.Minio;
 
     public string? AccessKey { get; set; }
     public string? SecretKey { get; set; }

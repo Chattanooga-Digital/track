@@ -9,6 +9,10 @@
   <!-- Identity's SignInManager, AddIdentity, and ConfigureApplicationCookie live in the
        ASP.NET Core shared framework; the classlib needs this to use them (matches Lutra). -->
   <ItemGroup>
+    <InternalsVisibleTo Include="Track.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 

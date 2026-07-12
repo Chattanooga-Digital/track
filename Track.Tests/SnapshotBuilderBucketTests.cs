@@ -1,6 +1,5 @@
 using Track.Data;
 using Track.Data.Models;
-using Track.Enums;
 using Track.Services;
 using Track.Website.Queries;
 using Microsoft.Data.Sqlite;
@@ -10,14 +9,7 @@ namespace Track.Tests;
 
 public class SnapshotBuilderBucketTests
 {
-    private static DiskSample Bucket(string source, string name, long size) => new()
-    {
-        Timestamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-        NodeName = source,
-        Kind = DiskUsageKind.Bucket,
-        Name = name,
-        SizeBytes = size,
-    };
+    private static BucketUsage Bucket(string source, string name, long size) => new(source, name, size, 0);
 
     private static async Task<(TrackContext Context, SqliteConnection Connection)> NewContextAsync()
     {

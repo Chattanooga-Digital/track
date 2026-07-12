@@ -18,8 +18,8 @@ public record NodeCollection(NodeCapacity Capacity, List<ContainerSample> Sample
 /// <summary>Summed capacity across all online nodes.</summary>
 public record ClusterCapacity(int NodeCount, long CpuCores, long MemoryBytes);
 
-/// <summary>Latest size of one S3 bucket, identified by its source and bucket name.</summary>
-public record BucketUsage(string SourceName, string BucketName, long SizeBytes);
+/// <summary>Latest usage of one S3 bucket, identified by its source and bucket name.</summary>
+public record BucketUsage(string SourceName, string BucketName, long SizeBytes, long ObjectCount);
 
 public record CurrentState(
     List<ContainerSample> Samples,
@@ -39,7 +39,7 @@ public sealed class CurrentStateHolder
     private readonly Dictionary<string, NodeCapacity> _capacityByNode = [];
     private readonly Dictionary<string, Dictionary<string, long>> _containerLayerBytesByNode = [];
     private readonly Dictionary<string, Dictionary<string, long>> _stackVolumeBytesByNode = [];
-    private readonly Dictionary<string, Dictionary<string, long>> _bucketBytesBySource = [];
+    private readonly Dictionary<string, List<BucketUsage>> _bucketsBySource = [];
 
     public void SetNodeSamples(string nodeName, NodeCollection collection, DateTime timestamp)
     {
@@ -95,16 +95,36 @@ public sealed class CurrentStateHolder
     }
 
     /// <summary>
-    /// Latest bucket sizes for one S3 source. Kept until the next successful poll of the same source
+    /// Latest bucket usage for one S3 source. Kept until the next successful poll of the same source
     /// rather than expired - an unreachable endpoint doesn't mean the storage went away.
     /// </summary>
-    public void SetBucketUsage(string sourceName, List<DiskSample> samples)
+    public void SetBucketUsage(string sourceName, List<BucketUsage> readings)
     {
         lock (_lock)
         {
-            _bucketBytesBySource[sourceName] = samples
-                .Where(s => s.Kind == DiskUsageKind.Bucket)
-                .ToDictionary(s => s.Name, s => s.SizeBytes);
+            _bucketsBySource[sourceName] = readings;
+        }
+    }
+
+    /// <summary>Forget a source's buckets entirely (a deleted or disabled source).</summary>
+    public void RemoveBucketSource(string sourceName)
+    {
+        lock (_lock)
+        {
+            _bucketsBySource.Remove(sourceName);
+        }
+    }
+
+    /// <summary>Drop cached buckets for any source not in <paramref name="sourceNames"/> (deleted sources).</summary>
+    public void RetainBucketSources(IReadOnlySet<string> sourceNames)
+    {
+        lock (_lock)
+        {
+            foreach (var name in _bucketsBySource.Keys.ToList())
+            {
+                if (!sourceNames.Contains(name))
+                    _bucketsBySource.Remove(name);
+            }
         }
     }
 
@@ -156,8 +176,8 @@ public sealed class CurrentStateHolder
             foreach (var (stackName, bytes) in _stackVolumeBytesByNode.Values.SelectMany(d => d))
                 stackVolumeBytes[stackName] = stackVolumeBytes.GetValueOrDefault(stackName) + bytes;
 
-            var buckets = _bucketBytesBySource
-                .SelectMany(source => source.Value.Select(b => new BucketUsage(source.Key, b.Key, b.Value)))
+            var buckets = _bucketsBySource.Values
+                .SelectMany(readings => readings)
                 .OrderBy(b => b.SourceName)
                 .ThenBy(b => b.BucketName)
                 .ToList();

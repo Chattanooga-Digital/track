@@ -96,7 +96,8 @@ and `Role : IdentityRole<Guid>` (`Track/Data/Models/`), and `TrackContext` deriv
 - `AuthController` (`/api/v0/auth`) exposes `login` (`SignInManager.PasswordSignInAsync`,
   `lockoutOnFailure: true`), `logout` (`SignInManager.SignOutAsync`), and `me`.
 - All data + configuration endpoints (`StatsController`, `CustomersController`,
-  `StacksController`) and the SignalR hub carry `[Authorize]`. Only the auth and health
+  `StacksController`, `BucketsController`, `S3SourcesController`) and the SignalR hub carry
+  `[Authorize]`. Only the auth and health
   endpoints and the static SPA files are anonymous — the SPA loads, then shows the login
   screen until `/auth/me` succeeds.
 - Auth-cookie signing keys are Data Protection keys; set `Track:DataProtectionKeysPath`
@@ -126,29 +127,47 @@ Docker's `/system/df` only sees container writable layers and named volumes, so 
 storage (and bind mounts) are invisible to the agents. Object storage is therefore polled
 **directly by the central**, not by agents:
 
-- `S3UsageCollector` (`Track/Services/S3/`) uses `AWSSDK.S3` against each configured
-  endpoint (path-style addressing, so MinIO works), lists buckets, and sizes each by
-  walking `ListObjectsV2` (one request per 1000 objects — hence a slow poll).
+- **Sources live in the DB** (`S3Source` table), managed live from the **Storage** UI
+  (`S3SourcesController`, `/api/v0/s3-sources`) — add, edit, disable, delete, and
+  test-connection without a restart. Secret keys are stored **encrypted** via Data
+  Protection (`S3SourceSecretProtector`, same key ring as the auth cookie) and never
+  returned to clients. `Name` is the stable key bucket assignments reference, so it is
+  immutable after creation. A one-time seed copies any `Track:S3Sources` config into the
+  DB on first startup (empty table), after which config is ignored.
+- **Sizing depends on the source `Kind`** (`S3UsageCollector`, `Track/Services/S3/`):
+  - `Minio` — one signed call to the admin data-usage API (`MinioAdminClient`,
+    `GET /minio/admin/v3/datausageinfo`, hand-rolled SigV4 since there is no .NET madmin
+    client) returns every bucket's size **and object count** from the scanner. No
+    per-object walk. Works for MinIO and RustFS.
+  - `GenericS3` — falls back to walking `ListObjectsV2` (one request per 1000 objects).
+    Portable but O(objects); use only for stores without an admin data-usage API.
+  - The S3 client sets `RequestChecksumCalculation`/`ResponseChecksumValidation` to
+    `WHEN_REQUIRED`. AWSSDK v4 defaults to `WHEN_SUPPORTED`, whose flexible-checksum
+    headers make MinIO/RustFS reject requests as `SignatureDoesNotMatch`.
 - `S3UsageHostedService` (central-only) runs every `Track:S3PollIntervalSeconds`
-  (default 900s), writes `DiskSample` rows of `DiskUsageKind.Bucket`
-  (`NodeName` = source name, `Name` = bucket name), merges them into `CurrentStateHolder`
-  via `SetBucketUsage`, and rebroadcasts. Per-source failures are isolated and the last
-  good reading is kept (an unreachable endpoint doesn't mean the storage vanished).
+  (default 900s): loads enabled sources from the DB, reconciles the live state
+  (`RetainBucketSources` drops deleted/disabled sources), polls each (per-source failures
+  isolated; last good reading kept), writes `DiskSample` rows of `DiskUsageKind.Bucket`
+  (`NodeName` = source, `Name` = bucket), merges into `CurrentStateHolder` via
+  `SetBucketUsage`, and rebroadcasts.
 - Buckets are **first-class**, not synthetic stacks. A `BucketAssignment` row
   (`SourceName` + `BucketName` → `CustomerId`, unique per bucket) maps a bucket to the
   customer billed for it, mirroring `StackAssignment`. `BucketsController`
   (`GET /api/v0/buckets`) lists them; `CustomersController` `PUT /customers/{id}/buckets`
   assigns them (moving a bucket already owned elsewhere), matching the stack flow.
+  Deleting a source releases its bucket assignments.
 - `SnapshotBuilder` places each bucket under its customer (or the unassigned group) and
   rolls bucket bytes into `UsageTotalsModel.ObjectStorageBytes`, kept **separate** from
   node-local `DiskBytes` at every level. Object storage does not affect blended billing
-  (which is CPU + memory only).
+  (which is CPU + memory only). Object count is carried in live state only (not persisted
+  as history).
 
-Configure sources centrally (Central mode only):
+Optional first-run seed (Central mode only; the UI manages sources thereafter):
 
 ```
-Track__S3Sources__0__Name        short id, prefixes nothing but identifies the source in the UI
+Track__S3Sources__0__Name        stable id, used as the bucket's source in assignments
 Track__S3Sources__0__Endpoint    e.g. http://minio:9000
+Track__S3Sources__0__Kind        Minio (default) or GenericS3
 Track__S3Sources__0__AccessKey
 Track__S3Sources__0__SecretKey
 Track__S3Sources__0__Region      optional, defaults to us-east-1 (MinIO ignores it)

@@ -13,6 +13,7 @@ public class TrackContext(DbContextOptions<TrackContext> options)
     public DbSet<ContainerSample> ContainerSamples => Set<ContainerSample>();
     public DbSet<DiskSample> DiskSamples => Set<DiskSample>();
     public DbSet<IdentityEnvVar> IdentityEnvVars => Set<IdentityEnvVar>();
+    public DbSet<S3Source> S3Sources => Set<S3Source>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

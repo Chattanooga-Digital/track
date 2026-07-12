@@ -68,6 +68,9 @@ async function logout() {
           <v-btn to="/agents" variant="text" size="small" prepend-icon="mdi-server-network"
             >Agents</v-btn
           >
+          <v-btn to="/storage" variant="text" size="small" prepend-icon="mdi-database"
+            >Storage</v-btn
+          >
           <v-btn to="/unidentified" variant="text" size="small" prepend-icon="mdi-help-network"
             >Unidentified</v-btn
           >

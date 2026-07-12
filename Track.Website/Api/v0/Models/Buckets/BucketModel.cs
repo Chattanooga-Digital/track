@@ -6,6 +6,7 @@ public class BucketModel
     public required string SourceName { get; set; }
     public required string BucketName { get; set; }
     public long SizeBytes { get; set; }
+    public long ObjectCount { get; set; }
     public int? CustomerId { get; set; }
     public string? CustomerName { get; set; }
 

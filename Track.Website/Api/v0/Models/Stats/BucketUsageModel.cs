@@ -6,4 +6,5 @@ public class BucketUsageModel
     public required string SourceName { get; set; }
     public required string BucketName { get; set; }
     public long SizeBytes { get; set; }
+    public long ObjectCount { get; set; }
 }

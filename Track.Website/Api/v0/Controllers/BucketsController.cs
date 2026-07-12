@@ -40,9 +40,7 @@ public class BucketsController(
             .Union(assignments.Select(a => (a.SourceName, a.BucketName)), StringTupleComparer)
             .ToList();
 
-        var sizeByKey = live.ToDictionary(b => (b.SourceName, b.BucketName), b => b.SizeBytes, StringTupleComparer);
-        var liveKeys = new HashSet<(string, string)>(
-            live.Select(b => (b.SourceName, b.BucketName)), StringTupleComparer);
+        var usageByKey = live.ToDictionary(b => (b.SourceName, b.BucketName), b => b, StringTupleComparer);
 
         var buckets = keys
             .OrderBy(k => k.SourceName)
@@ -50,14 +48,16 @@ public class BucketsController(
             .Select(key =>
             {
                 var assignment = assignmentByKey.GetValueOrDefault(key);
+                var usage = usageByKey.GetValueOrDefault(key);
                 return new BucketModel
                 {
                     SourceName = key.SourceName,
                     BucketName = key.BucketName,
-                    SizeBytes = sizeByKey.GetValueOrDefault(key),
+                    SizeBytes = usage?.SizeBytes ?? 0,
+                    ObjectCount = usage?.ObjectCount ?? 0,
                     CustomerId = assignment?.CustomerId,
                     CustomerName = assignment?.Customer?.Name,
-                    IsActive = liveKeys.Contains(key),
+                    IsActive = usage is not null,
                 };
             })
             .ToList();

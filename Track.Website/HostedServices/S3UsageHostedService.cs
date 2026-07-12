@@ -1,19 +1,21 @@
 using Track.Configuration;
 using Track.Data;
 using Track.Data.Models;
+using Track.Enums;
 using Track.Services;
 using Track.Services.S3;
 using Track.Website.Hubs;
 using Track.Website.Queries;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace Track.Website.HostedServices;
 
 /// <summary>
-/// Central-only: polls each configured S3 source for per-bucket sizes on a slow interval, persists the
-/// readings as bucket disk samples, merges them into the live state, and rebroadcasts the snapshot.
-/// Buckets are billed storage, so sources are polled directly by the central - no agent involved.
+/// Central-only: polls each enabled S3 source (configured in the DB, managed live from the UI) for per-bucket
+/// sizes on a slow interval, persists the readings, merges them into the live state, and rebroadcasts. Buckets
+/// are billed storage, so sources are polled directly by the central - no agent involved.
 /// </summary>
 public sealed class S3UsageHostedService(
     ILogger<S3UsageHostedService> logger,
@@ -32,10 +34,6 @@ public sealed class S3UsageHostedService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var sources = ValidSources();
-        if (sources.Count == 0)
-            return;
-
         var interval = TimeSpan.FromSeconds(Math.Max(60, _options.Value.S3PollIntervalSeconds));
         using var timer = new PeriodicTimer(interval);
 
@@ -45,7 +43,7 @@ public sealed class S3UsageHostedService(
             {
                 try
                 {
-                    await PollAsync(sources, stoppingToken);
+                    await PollAsync(stoppingToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -59,22 +57,20 @@ public sealed class S3UsageHostedService(
         }
     }
 
-    private List<S3SourceOptions> ValidSources()
+    private async Task PollAsync(CancellationToken cancellationToken)
     {
-        var sources = new List<S3SourceOptions>();
-        foreach (var source in _options.Value.S3Sources)
-        {
-            if (string.IsNullOrWhiteSpace(source.Name) || string.IsNullOrWhiteSpace(source.Endpoint))
-                _logger.LogWarning("Ignoring S3 source with missing Name or Endpoint");
-            else
-                sources.Add(source);
-        }
+        using var scope = _serviceScopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<TrackContext>();
+        var protector = scope.ServiceProvider.GetRequiredService<S3SourceSecretProtector>();
 
-        return sources;
-    }
+        var sources = await context.S3Sources
+            .AsNoTracking()
+            .Where(s => s.Enabled)
+            .ToListAsync(cancellationToken);
 
-    private async Task PollAsync(List<S3SourceOptions> sources, CancellationToken cancellationToken)
-    {
+        // Drop cached buckets for sources that were deleted or disabled since the last poll.
+        _currentStateHolder.RetainBucketSources(sources.Select(s => s.Name).ToHashSet());
+
         var timestamp = DateTime.UtcNow;
         var collected = new List<DiskSample>();
 
@@ -84,9 +80,17 @@ public sealed class S3UsageHostedService(
             // reading for a failed source stays current - storage doesn't vanish when its API is down.
             try
             {
-                var samples = await _collector.CollectAsync(source, timestamp, cancellationToken);
-                _currentStateHolder.SetBucketUsage(source.Name!, samples);
-                collected.AddRange(samples);
+                var target = ToTarget(source, protector);
+                var readings = await _collector.CollectAsync(target, cancellationToken);
+                _currentStateHolder.SetBucketUsage(source.Name, readings);
+                collected.AddRange(readings.Select(r => new DiskSample
+                {
+                    Timestamp = timestamp,
+                    NodeName = r.SourceName,
+                    Kind = DiskUsageKind.Bucket,
+                    Name = r.BucketName,
+                    SizeBytes = r.SizeBytes,
+                }));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -94,15 +98,21 @@ public sealed class S3UsageHostedService(
             }
         }
 
-        if (collected.Count == 0)
-            return;
-
-        using var scope = _serviceScopeFactory.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<TrackContext>();
-        context.DiskSamples.AddRange(collected);
-        await context.SaveChangesAsync(cancellationToken);
+        if (collected.Count > 0)
+        {
+            context.DiskSamples.AddRange(collected);
+            await context.SaveChangesAsync(cancellationToken);
+        }
 
         var snapshot = await scope.ServiceProvider.GetRequiredService<SnapshotBuilder>().BuildAsync(cancellationToken);
         await _hubContext.Clients.All.SendAsync(TrackHub.SnapshotEvent, snapshot, cancellationToken);
     }
+
+    private S3PollTarget ToTarget(S3Source source, S3SourceSecretProtector protector) => new(
+        source.Name,
+        source.Endpoint,
+        source.Kind,
+        source.AccessKey,
+        protector.Unprotect(source.SecretKeyProtected),
+        source.Region);
 }

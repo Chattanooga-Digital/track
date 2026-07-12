@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Track.Configuration;
 using Track.DependencyInjection;
 using Track.Website;
@@ -40,6 +41,8 @@ builder.Services
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+        // Serialize enums (e.g. S3 source kind) as their names, so the API contract is stable and readable.
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     })
     .Services
     .AddOpenApi()

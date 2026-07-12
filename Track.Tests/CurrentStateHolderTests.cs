@@ -1,19 +1,11 @@
-using Track.Data.Models;
-using Track.Enums;
 using Track.Services;
 
 namespace Track.Tests;
 
 public class CurrentStateHolderTests
 {
-    private static DiskSample Bucket(string source, string name, long size) => new()
-    {
-        Timestamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-        NodeName = source,
-        Kind = DiskUsageKind.Bucket,
-        Name = name,
-        SizeBytes = size,
-    };
+    private static BucketUsage Bucket(string source, string name, long size, long count = 0) =>
+        new(source, name, size, count);
 
     [Test]
     public void GetCurrent_ExposesBucketsFromAllSources()
@@ -56,5 +48,18 @@ public class CurrentStateHolderTests
         // A bucket named "shared" on two sources is two distinct buckets, not a collision.
         Assert.That(buckets, Has.Count.EqualTo(2));
         Assert.That(buckets.Sum(b => b.SizeBytes), Is.EqualTo(30));
+    }
+
+    [Test]
+    public void RetainBucketSources_DropsBucketsFromSourcesNoLongerPresent()
+    {
+        var holder = new CurrentStateHolder();
+        holder.SetBucketUsage("minio-a", [Bucket("minio-a", "nextcloud", 4_700)]);
+        holder.SetBucketUsage("minio-b", [Bucket("minio-b", "backups", 1_000)]);
+
+        holder.RetainBucketSources(new HashSet<string> { "minio-a" });
+
+        var buckets = holder.GetCurrent().Buckets;
+        Assert.That(buckets.Select(b => b.SourceName), Is.EquivalentTo(new[] { "minio-a" }));
     }
 }
