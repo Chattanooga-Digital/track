@@ -38,14 +38,14 @@ public sealed class StatsPushHostedService(
                 {
                     await PushAsync(stoppingToken);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                // Filter on the token, not the type: a timeout's TaskCanceledException must retry, not kill the loop.
+                catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
                 {
-                    // Survive a transient docker/network failure; the next tick retries.
                     _logger.LogError(ex, "Stats push failed");
                 }
             } while (await timer.WaitForNextTickAsync(stoppingToken));
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             // Shutdown.
         }

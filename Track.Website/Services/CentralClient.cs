@@ -41,6 +41,8 @@ public sealed class CentralClient(HttpClient httpClient, IOptions<TrackOptions> 
             ?? throw new InvalidOperationException("Track:Central:Url must be set in Agent mode.");
 
         client.BaseAddress = new Uri(url);
+        // Fail fast on a slow/hung central rather than stalling the whole poll tick on the 100s default.
+        client.Timeout = TimeSpan.FromSeconds(30);
         if (!string.IsNullOrWhiteSpace(options.Central.Key))
             client.DefaultRequestHeaders.Add(KeyHeader, options.Central.Key);
     }

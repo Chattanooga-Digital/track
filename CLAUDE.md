@@ -270,7 +270,9 @@ Follows the standard house style (see `.editorconfig`):
   injected dependencies as `protected` properties (matches the Lutra pattern)
 - `sealed` on hosted services and collectors that are not meant to be inherited
 - Private fields `_camelCase`; interfaces `I`-prefixed; DTOs `...Model` suffix
-- Keep comments to the non-obvious *why*, not a restatement of the code
+- Comment sparingly. Only the genuinely non-obvious *why* or an edge case earns a comment,
+  and keep it to a single short line. No multi-line explanations, no restating the code. Most
+  code needs no comment at all.
 
 ### Entities
 

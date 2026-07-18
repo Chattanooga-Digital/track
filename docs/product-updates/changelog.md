@@ -4,6 +4,12 @@ Welcome to the Track changelog. Here you'll find a history of product updates,
 improvements, bug fixes, and new features by version.
 
 ## Releases
+### 0.6.1 - 2026-07-18
+#### Bug Fixes
+ - Agents no longer go permanently offline after a timeout: a slow or hung central (or Docker daemon) previously killed the agent's stats push loop for good, so nodes showed "unreachable: No report received" with zero CPU and memory until the agent was restarted. The push loops now treat a timeout as a transient failure and retry on the next tick
+ - The central push now times out after 30 seconds instead of stalling a poll tick for up to 100 seconds
+ - The live dashboard reconnects indefinitely after a longer central outage, instead of giving up after ~30 seconds and staying stuck on "Reconnecting" until a page reload
+
 ### 0.6.0 - 2026-07-12
 #### Features
  - Month-by-month billing: pick a billing period on the Billing page to see each customer's average blended utilization, memory, disk, and object storage for that month, alongside the live view
