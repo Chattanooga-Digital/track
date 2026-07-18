@@ -20,4 +20,16 @@ public class UsageTotalsModel
 
     /// <summary>Mean of CPU and memory cluster share, the single blended billing figure (0-100).</summary>
     public double BlendedPercentOfCluster { get; set; }
+
+    /// <summary>Compute charge: this scope's share of the recovered cluster cost. $0 for the unassigned group.</summary>
+    public decimal ComputeCost { get; set; }
+
+    /// <summary>Node-local disk charge at the flat per-GB rate.</summary>
+    public decimal DiskCost { get; set; }
+
+    /// <summary>Object storage charge at the flat per-GB rate.</summary>
+    public decimal ObjectStorageCost { get; set; }
+
+    /// <summary>Compute + disk + object storage.</summary>
+    public decimal TotalCost { get; set; }
 }

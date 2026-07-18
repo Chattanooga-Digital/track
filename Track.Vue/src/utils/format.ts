@@ -18,3 +18,13 @@ export function memoryPercent(used: number, limit: number): number {
   if (limit <= 0) return 0
   return (used / limit) * 100
 }
+
+export function formatMoney(amount: number | null | undefined, currency = 'USD'): string {
+  if (amount === null || amount === undefined) return '—'
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount)
+  } catch {
+    // Unknown/invalid currency code: fall back to a plain number with the code appended.
+    return `${amount.toFixed(2)} ${currency}`
+  }
+}

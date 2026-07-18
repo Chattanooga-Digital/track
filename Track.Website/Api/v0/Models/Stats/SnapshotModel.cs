@@ -7,4 +7,7 @@ public class SnapshotModel
     public UsageTotalsModel Totals { get; set; } = new();
     public List<NodeStatusModel> Nodes { get; set; } = [];
     public List<CustomerGroupModel> Customers { get; set; } = [];
+
+    /// <summary>Billing currency (ISO code) for the cost figures on the usage totals.</summary>
+    public string Currency { get; set; } = "USD";
 }

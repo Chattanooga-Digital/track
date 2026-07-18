@@ -116,6 +116,33 @@ namespace Track.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Track.Data.Models.BillingRate", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("ClusterComputeMonthlyCost")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("DiskRatePerGbMonth")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ObjectStorageRatePerGbMonth")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BillingRates");
+                });
+
             modelBuilder.Entity("Track.Data.Models.BillingSample", b =>
                 {
                     b.Property<long>("Id")

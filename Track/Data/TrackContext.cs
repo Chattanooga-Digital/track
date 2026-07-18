@@ -16,6 +16,7 @@ public class TrackContext(DbContextOptions<TrackContext> options)
     public DbSet<ClusterCapacitySample> ClusterCapacitySamples => Set<ClusterCapacitySample>();
     public DbSet<IdentityEnvVar> IdentityEnvVars => Set<IdentityEnvVar>();
     public DbSet<S3Source> S3Sources => Set<S3Source>();
+    public DbSet<BillingRate> BillingRates => Set<BillingRate>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

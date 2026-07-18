@@ -1,5 +1,7 @@
 using Track.Data;
+using Track.Data.Models;
 using Track.Services;
+using Track.Services.Billing;
 using Track.Website.Api.v0.Models.Stats;
 using Microsoft.EntityFrameworkCore;
 
@@ -162,7 +164,55 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
         };
         ApplyClusterShare(snapshot.Totals, state.ClusterCapacity);
 
+        await ApplyCostsAsync(snapshot, cancellationToken);
+
         return snapshot;
+    }
+
+    /// <summary>
+    /// Turns the blended shares into dollars. Compute is full cost recovery: the fixed cluster cost is spread
+    /// across paying customers by blended footprint (unassigned excluded from the denominator), so customer
+    /// bills sum to the cluster cost. Storage is a flat per-GB markup on assigned usage.
+    /// </summary>
+    private async Task ApplyCostsAsync(SnapshotModel snapshot, CancellationToken cancellationToken)
+    {
+        var rate = await _metricsContext.BillingRates.AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken) ?? new BillingRate();
+        snapshot.Currency = rate.Currency;
+
+        var totalCustomerBlended = snapshot.Customers
+            .Where(c => c.CustomerId is not null)
+            .Sum(c => c.Totals.BlendedPercentOfCluster);
+        var baseRate = BillingCostCalculator.ComputeBaseRate(rate.ClusterComputeMonthlyCost, totalCustomerBlended);
+
+        foreach (var group in snapshot.Customers)
+        {
+            var assigned = group.CustomerId is not null;
+            foreach (var stack in group.Stacks)
+                ApplyCost(stack.Totals, baseRate, assigned, rate);
+            ApplyCost(group.Totals, baseRate, assigned, rate);
+        }
+
+        // Cluster total is the sum of what customers actually pay, not the formula over the grand blended
+        // (which would include the unassigned remainder and overshoot the recovered cost).
+        snapshot.Totals.ComputeCost = snapshot.Customers.Sum(c => c.Totals.ComputeCost);
+        snapshot.Totals.DiskCost = snapshot.Customers.Sum(c => c.Totals.DiskCost);
+        snapshot.Totals.ObjectStorageCost = snapshot.Customers.Sum(c => c.Totals.ObjectStorageCost);
+        snapshot.Totals.TotalCost = snapshot.Totals.ComputeCost + snapshot.Totals.DiskCost + snapshot.Totals.ObjectStorageCost;
+    }
+
+    private static void ApplyCost(UsageTotalsModel totals, decimal baseRate, bool assigned, BillingRate rate)
+    {
+        var costs = BillingCostCalculator.ForScope(
+            assigned ? totals.BlendedPercentOfCluster : 0,
+            baseRate,
+            assigned ? totals.DiskBytes : 0,
+            assigned ? totals.ObjectStorageBytes : 0,
+            rate);
+        totals.ComputeCost = costs.ComputeCost;
+        totals.DiskCost = costs.DiskCost;
+        totals.ObjectStorageCost = costs.ObjectStorageCost;
+        totals.TotalCost = costs.TotalCost;
     }
 
     /// <summary>Stable composite key for a bucket's (source, name) identity; matched case-insensitively.</summary>

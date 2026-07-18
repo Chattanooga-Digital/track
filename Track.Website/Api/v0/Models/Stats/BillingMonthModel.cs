@@ -14,6 +14,15 @@ public class BillingMonthModel
 
     public BillingCapacityModel Capacity { get; set; } = new();
     public List<BillingCustomerModel> Customers { get; set; } = [];
+
+    /// <summary>Billing currency (ISO code) in effect for the figures below.</summary>
+    public string Currency { get; set; } = "USD";
+
+    /// <summary>Sum of every customer's compute charge; equals the recovered cluster cost when usage was nonzero.</summary>
+    public decimal ComputeCost { get; set; }
+    public decimal DiskCost { get; set; }
+    public decimal ObjectStorageCost { get; set; }
+    public decimal TotalCost { get; set; }
 }
 
 /// <summary>Average cluster capacity over the month's ticks (fractional when nodes came and went).</summary>
@@ -40,4 +49,10 @@ public class BillingCustomerModel
     public double CpuPercentOfCluster { get; set; }
     public double MemoryPercentOfCluster { get; set; }
     public double BlendedPercentOfCluster { get; set; }
+
+    /// <summary>Compute charge: share of the recovered cluster cost. $0 for the unassigned remainder.</summary>
+    public decimal ComputeCost { get; set; }
+    public decimal DiskCost { get; set; }
+    public decimal ObjectStorageCost { get; set; }
+    public decimal TotalCost { get; set; }
 }

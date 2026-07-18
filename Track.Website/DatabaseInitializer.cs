@@ -20,6 +20,7 @@ public static class DatabaseInitializer
 
         await SeedAdminAsync(scope.ServiceProvider, logger);
         await SeedS3SourcesAsync(scope.ServiceProvider, context, logger);
+        await SeedBillingRateAsync(context);
 
         // Prime the identity env-var cache so grouping config survives restarts and is served on the first push.
         var identityEnvVarStore = scope.ServiceProvider.GetRequiredService<Track.Services.IdentityEnvVarStore>();
@@ -63,6 +64,16 @@ public static class DatabaseInitializer
         logger.LogWarning(
             "Seeded admin user '{Username}'. Change the password via Track:AdminPassword if it is still the default.",
             options.AdminUsername);
+    }
+
+    /// <summary>Ensures the single zero-rate pricing row exists so the UI always has something to edit.</summary>
+    private static async Task SeedBillingRateAsync(TrackContext context)
+    {
+        if (await context.BillingRates.AnyAsync())
+            return;
+
+        context.BillingRates.Add(new BillingRate());
+        await context.SaveChangesAsync();
     }
 
     /// <summary>

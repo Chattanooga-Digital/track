@@ -20,6 +20,10 @@ export interface UsageTotalsDto {
   cpuPercentOfCluster: number
   memoryPercentOfCluster: number
   blendedPercentOfCluster: number
+  computeCost: number
+  diskCost: number
+  objectStorageCost: number
+  totalCost: number
 }
 
 export interface BucketUsageDto {
@@ -68,6 +72,7 @@ export interface SnapshotDto {
   totals: UsageTotalsDto
   nodes: NodeStatusDto[]
   customers: CustomerGroupDto[]
+  currency: string
 }
 
 export interface BillingCapacityDto {
@@ -86,6 +91,10 @@ export interface BillingCustomerDto {
   cpuPercentOfCluster: number
   memoryPercentOfCluster: number
   blendedPercentOfCluster: number
+  computeCost: number
+  diskCost: number
+  objectStorageCost: number
+  totalCost: number
 }
 
 export interface BillingMonthDto {
@@ -95,6 +104,18 @@ export interface BillingMonthDto {
   sampleCount: number
   capacity: BillingCapacityDto
   customers: BillingCustomerDto[]
+  currency: string
+  computeCost: number
+  diskCost: number
+  objectStorageCost: number
+  totalCost: number
+}
+
+export interface BillingRateDto {
+  clusterComputeMonthlyCost: number
+  diskRatePerGbMonth: number
+  objectStorageRatePerGbMonth: number
+  currency: string
 }
 
 export interface HistoryBucketDto {

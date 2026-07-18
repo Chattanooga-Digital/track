@@ -135,6 +135,40 @@ public class BillingTests
     }
 
     [Test]
+    public async Task GetBillingMonth_RecoversFullClusterCostFromCustomers_UnassignedBillsNothing()
+    {
+        var (context, connection) = await NewContextAsync();
+        await using var _ = connection;
+        await using var __ = context;
+
+        var tick = new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc);
+        context.ClusterCapacitySamples.Add(new ClusterCapacitySample
+        {
+            Timestamp = tick,
+            NodeCount = 1,
+            CpuCores = 4,
+            MemoryBytes = 8_000_000_000,
+        });
+        context.BillingSamples.AddRange(
+            new BillingSample { Timestamp = tick, CustomerId = 1, CustomerName = "Acme", BlendedPercentOfCluster = 10 },
+            new BillingSample { Timestamp = tick, CustomerId = 2, CustomerName = "Globex", BlendedPercentOfCluster = 30 },
+            // The unassigned remainder (null customer) consumes too, but must never be billed.
+            new BillingSample { Timestamp = tick, CustomerId = null, CustomerName = null, BlendedPercentOfCluster = 60 });
+        context.BillingRates.Add(new BillingRate { ClusterComputeMonthlyCost = 1000m, Currency = "USD" });
+        await context.SaveChangesAsync();
+
+        var result = await NewController(context).GetBillingMonth("2026-06", default) as OkObjectResult;
+        var model = (BillingMonthModel)result!.Value!;
+
+        // Base rate spreads $1000 over the 40 paying blended points (unassigned's 60 excluded).
+        Assert.That(model.Customers.Single(c => c.CustomerId == 1).ComputeCost, Is.EqualTo(250m));
+        Assert.That(model.Customers.Single(c => c.CustomerId == 2).ComputeCost, Is.EqualTo(750m));
+        Assert.That(model.Customers.Single(c => c.CustomerId == null).ComputeCost, Is.EqualTo(0m));
+        Assert.That(model.ComputeCost, Is.EqualTo(1000m)); // full recovery from paying customers
+        Assert.That(model.Currency, Is.EqualTo("USD"));
+    }
+
+    [Test]
     public async Task GetBillingMonths_ListsMonthsNewestFirst()
     {
         var (context, connection) = await NewContextAsync();

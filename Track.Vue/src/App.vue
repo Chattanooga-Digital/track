@@ -4,13 +4,16 @@ import { useSnapshotStore } from '@/stores/snapshotStore'
 import { useAuthStore } from '@/stores/authStore'
 import LoginView from '@/views/LoginView.vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
+import { getAbout } from '@/api/aboutApi'
 
 const snapshotStore = useSnapshotStore()
 const authStore = useAuthStore()
 const changePasswordOpen = ref(false)
+const version = ref('')
 
-onMounted(() => {
+onMounted(async () => {
   authStore.initialize()
+  version.value = (await getAbout()).version
 })
 
 // Start the live feed only once authenticated; tear it down on logout.
@@ -136,6 +139,15 @@ async function logout() {
 
         <router-view />
       </v-main>
+
+      <v-footer
+        app
+        height="26"
+        color="surface"
+        class="text-caption text-medium-emphasis justify-end px-4"
+      >
+        <span v-if="version">Track v{{ version }}</span>
+      </v-footer>
     </template>
   </v-app>
 </template>

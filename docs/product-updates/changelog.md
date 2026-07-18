@@ -4,6 +4,13 @@ Welcome to the Track changelog. Here you'll find a history of product updates,
 improvements, bug fixes, and new features by version.
 
 ## Releases
+### 0.7.0 - 2026-07-18
+#### Features
+ - Billing now shows dollars, not just percentages. Set your monthly cluster cost and per-GB storage rates from the new Rates button on the Billing page
+ - Compute is billed as a utility with full cost recovery: your whole cluster cost is split across paying customers by blended usage, so idle capacity and unassigned overhead are spread across customers instead of absorbed. Even a lightly used cluster recovers 100% of its cost
+ - Disk and object storage bill at a flat per-GB rate as separate line items; set the disk rate to 0 to treat local disk as bundled into the compute cost
+ - Both the live view and each recorded month show per-customer compute, disk, object storage, and total charges, priced at your current rates
+
 ### 0.6.1 - 2026-07-18
 #### Bug Fixes
  - Agents no longer go permanently offline after a timeout: a slow or hung central (or Docker daemon) previously killed the agent's stats push loop for good, so nodes showed "unreachable: No report received" with zero CPU and memory until the agent was restarted. The push loops now treat a timeout as a transient failure and retry on the next tick

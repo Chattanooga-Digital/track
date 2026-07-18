@@ -1,6 +1,8 @@
 using System.Globalization;
 using Track.Data;
+using Track.Data.Models;
 using Track.Enums;
+using Track.Services.Billing;
 using Track.Website.Api.v0.Models.Stats;
 using Track.Website.Queries;
 using Microsoft.AspNetCore.Authorization;
@@ -146,6 +148,32 @@ public class StatsController(
             })
             .OrderByDescending(c => c.BlendedPercentOfCluster)
             .ToList();
+
+        // Dollars use the current rate against the month's averages (rates re-price history rather than freeze).
+        var rate = await TrackContext.BillingRates.AsNoTracking().FirstOrDefaultAsync(cancellationToken) ?? new BillingRate();
+        model.Currency = rate.Currency;
+        var totalCustomerBlended = model.Customers
+            .Where(c => c.CustomerId is not null)
+            .Sum(c => c.BlendedPercentOfCluster);
+        var baseRate = BillingCostCalculator.ComputeBaseRate(rate.ClusterComputeMonthlyCost, totalCustomerBlended);
+        foreach (var c in model.Customers)
+        {
+            var assigned = c.CustomerId is not null;
+            var costs = BillingCostCalculator.ForScope(
+                assigned ? c.BlendedPercentOfCluster : 0,
+                baseRate,
+                assigned ? c.DiskBytes : 0,
+                assigned ? c.ObjectStorageBytes : 0,
+                rate);
+            c.ComputeCost = costs.ComputeCost;
+            c.DiskCost = costs.DiskCost;
+            c.ObjectStorageCost = costs.ObjectStorageCost;
+            c.TotalCost = costs.TotalCost;
+        }
+        model.ComputeCost = model.Customers.Sum(c => c.ComputeCost);
+        model.DiskCost = model.Customers.Sum(c => c.DiskCost);
+        model.ObjectStorageCost = model.Customers.Sum(c => c.ObjectStorageCost);
+        model.TotalCost = model.ComputeCost + model.DiskCost + model.ObjectStorageCost;
 
         return Ok(model);
     }
