@@ -23,6 +23,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS publish
 # imports env vars as properties case-insensitively, so a lowercase "version" would leak in
 # as the Version property and break the build with the branch name on non-tag builds.
 ARG APP_VERSION=
+# .git is not in the build context, so the SDK can't find the commit for the version itself.
+ARG GIT_SHA=
 WORKDIR /src
 COPY . .
 WORKDIR /src/Track.Website
@@ -30,9 +32,9 @@ WORKDIR /src/Track.Website
 # which is not a valid MSBuild version. Only override when it parses as a real version;
 # otherwise fall back to the csproj <VersionPrefix>.
 RUN if echo "${APP_VERSION}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'; then \
-        dotnet publish "Track.Website.csproj" -c Release -o /app/publish "/p:Version=${APP_VERSION}"; \
+        dotnet publish "Track.Website.csproj" -c Release -o /app/publish "/p:Version=${APP_VERSION}" "/p:SourceRevisionId=${GIT_SHA}"; \
     else \
-        dotnet publish "Track.Website.csproj" -c Release -o /app/publish; \
+        dotnet publish "Track.Website.csproj" -c Release -o /app/publish "/p:SourceRevisionId=${GIT_SHA}"; \
     fi
 
 FROM base AS final

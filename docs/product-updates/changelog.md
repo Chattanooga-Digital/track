@@ -4,6 +4,10 @@ Welcome to the Track changelog. Here you'll find a history of product updates,
 improvements, bug fixes, and new features by version.
 
 ## Releases
+### 0.7.1 - 2026-11-03
+#### Changes
+ - The footer shows the commit the running build came from next to the version, such as v0.7.1+5e13aef
+
 ### 0.7.0 - 2026-07-18
 #### Features
  - Billing now shows dollars, not just percentages. Set your monthly cluster cost and per-GB storage rates from the new Rates button on the Billing page

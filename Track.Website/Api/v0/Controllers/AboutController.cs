@@ -22,8 +22,9 @@ public class AboutController : ControllerBase
         if (string.IsNullOrEmpty(informational))
             return "unknown";
 
-        // Drop any +buildmetadata suffix the SDK appends.
-        var plus = informational.IndexOf('+');
-        return plus >= 0 ? informational[..plus] : informational;
+        var versionAndCommit = informational.Split('+', 2);
+        // CI's fourth version component is its run number, which the commit already pins down.
+        var release = string.Join('.', versionAndCommit[0].Split('.').Take(3));
+        return versionAndCommit is [_, var commit] ? $"{release}+{commit[..Math.Min(7, commit.Length)]}" : release;
     }
 }
