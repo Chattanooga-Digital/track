@@ -45,18 +45,22 @@ Configure `Track:Nodes` in `Track.Website/appsettings.json` with a name + engine
 endpoint per node (unix socket or `tcp://host:2375`). With none configured it uses the
 local socket. See [CLAUDE.md](CLAUDE.md) for the full architecture and conventions.
 
-## CI / Docker Hub
+## CI / deploy
 
 [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml) builds the
-image and pushes it to Docker Hub as `strangewill/track` on every push to the default
-branch (tag `latest`) and on `v*.*.*` git tags (semver tags). Pull requests build only.
+image and pushes it to GitHub Container Registry as `ghcr.io/chattanooga-digital/track`,
+tagged `<VersionPrefix>.<run number>`, on every push to the default branch (also `latest`)
+and on `v*.*.*` git tags (semver tags). Pull requests build only.
 
-Required repository secrets (Settings → Secrets and variables → Actions):
+Each push to `master` then creates a Polecat release of that version, which deploys the
+`track` stack to production. The deploy definition is the `track` folder of
+`roushtech/deployments`.
+
+Required repository secret (Settings → Secrets and variables → Actions):
 
 | Secret | Value |
 |---|---|
-| `DOCKERHUB_USERNAME` | your Docker Hub username (`strangewill`) |
-| `DOCKERHUB_TOKEN` | a Docker Hub access token with Read/Write scope |
+| `POLECAT_TOKEN` | a Polecat personal access token |
 
 The image builds `linux/amd64`. To also publish arm64, add `platforms: linux/amd64,linux/arm64`
 to the build step (slower, via QEMU).

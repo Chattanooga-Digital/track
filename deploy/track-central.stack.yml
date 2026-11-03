@@ -7,7 +7,7 @@ version: "3.8"
 
 services:
   track:
-    image: strangewill/track:latest
+    image: ghcr.io/chattanooga-digital/track:latest
     networks:
       - traefik_net
     volumes:

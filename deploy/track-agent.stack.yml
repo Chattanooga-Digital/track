@@ -7,7 +7,7 @@ version: "3.8"
 
 services:
   agent:
-    image: strangewill/track:latest
+    image: ghcr.io/chattanooga-digital/track:latest
     networks:
       - traefik_net                  # same overlay as the central service, so `track` resolves
     volumes:

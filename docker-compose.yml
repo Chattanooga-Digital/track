@@ -3,7 +3,7 @@ services:
   track:
     build:
       context: .
-    image: strangewill/track:latest
+    image: ghcr.io/chattanooga-digital/track:latest
     ports:
       - "5020:5020"
     volumes:
@@ -21,7 +21,7 @@ services:
   track-agent:
     build:
       context: .
-    image: strangewill/track:latest
+    image: ghcr.io/chattanooga-digital/track:latest
     depends_on:
       - track
     volumes:
