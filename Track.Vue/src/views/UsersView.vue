@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import type { UserDto } from '@/types/users'
 import { getUsers, createUser, updateUser, setUserPassword, deleteUser } from '@/api/usersApi'
 import { apiErrorMessage } from '@/api/http'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useAuthStore } from '@/stores/authStore'
 
 const authStore = useAuthStore()
@@ -119,14 +120,30 @@ async function savePassword() {
   }
 }
 
-async function remove(user: UserDto) {
-  if (!confirm(`Delete user "${user.username}"? This cannot be undone.`)) return
+const deleteOpen = ref(false)
+const deleteTarget = ref<UserDto | null>(null)
+const deleting = ref(false)
+const deleteError = ref('')
+
+function remove(user: UserDto) {
+  deleteTarget.value = user
+  deleteError.value = ''
+  deleteOpen.value = true
+}
+
+async function confirmDelete() {
+  if (!deleteTarget.value) return
+  deleting.value = true
+  deleteError.value = ''
   try {
-    await deleteUser(user.id)
+    await deleteUser(deleteTarget.value.id)
+    deleteOpen.value = false
+    await refresh()
   } catch (e) {
-    alert(apiErrorMessage(e, 'Deleting the user failed.'))
+    deleteError.value = apiErrorMessage(e, 'Deleting the user failed.')
+  } finally {
+    deleting.value = false
   }
-  await refresh()
 }
 
 const canSave = () =>
@@ -293,5 +310,16 @@ const canSavePassword = () =>
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <ConfirmDialog
+      v-model="deleteOpen"
+      title="Delete user"
+      :busy="deleting"
+      :error="deleteError"
+      @confirm="confirmDelete"
+    >
+      Delete <strong>{{ deleteTarget?.username }}</strong
+      >? This cannot be undone.
+    </ConfirmDialog>
   </div>
 </template>

@@ -12,6 +12,8 @@ import {
 } from '@/api/customersApi'
 import { getStacks, setSharedStacks } from '@/api/stacksApi'
 import { getBuckets, setSharedBuckets } from '@/api/bucketsApi'
+import { apiErrorMessage } from '@/api/http'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const customers = ref<CustomerDto[]>([])
 const stacks = ref<StackDto[]>([])
@@ -118,15 +120,30 @@ async function saveCustomer() {
   await refresh()
 }
 
-async function removeCustomer(customer: CustomerDto) {
-  if (
-    !confirm(
-      `Delete customer "${customer.name}"? Its stack and bucket assignments will be released.`,
-    )
-  )
-    return
-  await deleteCustomer(customer.id)
-  await refresh()
+const deleteOpen = ref(false)
+const deleteTarget = ref<CustomerDto | null>(null)
+const deleting = ref(false)
+const deleteError = ref('')
+
+function removeCustomer(customer: CustomerDto) {
+  deleteTarget.value = customer
+  deleteError.value = ''
+  deleteOpen.value = true
+}
+
+async function confirmDelete() {
+  if (!deleteTarget.value) return
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await deleteCustomer(deleteTarget.value.id)
+    deleteOpen.value = false
+    await refresh()
+  } catch (e) {
+    deleteError.value = apiErrorMessage(e, 'Deleting the customer failed.')
+  } finally {
+    deleting.value = false
+  }
 }
 
 function openStacks(customer: CustomerDto) {
@@ -371,5 +388,16 @@ async function saveBuckets() {
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <ConfirmDialog
+      v-model="deleteOpen"
+      title="Delete customer"
+      :busy="deleting"
+      :error="deleteError"
+      @confirm="confirmDelete"
+    >
+      Delete <strong>{{ deleteTarget?.name }}</strong
+      >? Its stacks and buckets become unassigned.
+    </ConfirmDialog>
   </div>
 </template>

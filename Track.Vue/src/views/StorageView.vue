@@ -6,6 +6,8 @@ import { getBuckets, setBucketAssignment } from '@/api/bucketsApi'
 import { getCustomers } from '@/api/customersApi'
 import { formatBytes } from '@/utils/format'
 import AssignmentSelect from '@/components/AssignmentSelect.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import { apiErrorMessage } from '@/api/http'
 import {
   getS3Sources,
   createS3Source,
@@ -144,15 +146,30 @@ async function save() {
   }
 }
 
-async function remove(source: S3SourceDto) {
-  if (
-    !confirm(
-      `Delete S3 source "${source.name}"? Its bucket-to-customer assignments will be released.`,
-    )
-  )
-    return
-  await deleteS3Source(source.id)
-  await refresh()
+const deleteOpen = ref(false)
+const deleteTarget = ref<S3SourceDto | null>(null)
+const deleting = ref(false)
+const deleteError = ref('')
+
+function remove(source: S3SourceDto) {
+  deleteTarget.value = source
+  deleteError.value = ''
+  deleteOpen.value = true
+}
+
+async function confirmDelete() {
+  if (!deleteTarget.value) return
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await deleteS3Source(deleteTarget.value.id)
+    deleteOpen.value = false
+    await refresh()
+  } catch (e) {
+    deleteError.value = apiErrorMessage(e, 'Deleting the source failed.')
+  } finally {
+    deleting.value = false
+  }
 }
 
 const canSave = () =>
@@ -333,6 +350,17 @@ const canSave = () =>
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <ConfirmDialog
+      v-model="deleteOpen"
+      title="Delete S3 source"
+      :busy="deleting"
+      :error="deleteError"
+      @confirm="confirmDelete"
+    >
+      Delete <strong>{{ deleteTarget?.name }}</strong
+      >? Its buckets stop being tracked and lose their assignments.
+    </ConfirmDialog>
   </div>
 </template>
 

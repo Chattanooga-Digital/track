@@ -4,6 +4,10 @@ Welcome to the Track changelog. Here you'll find a history of product updates,
 improvements, bug fixes, and new features by version.
 
 ## Releases
+### 0.9.1 - 2026-11-03
+#### Changes
+ - Deleting a user, customer or S3 source asks for confirmation in the app instead of a browser popup, and shows any error there
+
 ### 0.9.0 - 2026-11-03
 #### Features
  - S3 buckets can be marked as shared infrastructure too, such as backups, so they are reported but not billed
