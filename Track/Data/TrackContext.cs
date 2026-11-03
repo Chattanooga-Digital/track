@@ -9,6 +9,7 @@ public class TrackContext(DbContextOptions<TrackContext> options)
 {
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<StackAssignment> StackAssignments => Set<StackAssignment>();
+    public DbSet<SharedStack> SharedStacks => Set<SharedStack>();
     public DbSet<BucketAssignment> BucketAssignments => Set<BucketAssignment>();
     public DbSet<ContainerSample> ContainerSamples => Set<ContainerSample>();
     public DbSet<DiskSample> DiskSamples => Set<DiskSample>();

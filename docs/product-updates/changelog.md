@@ -4,6 +4,10 @@ Welcome to the Track changelog. Here you'll find a history of product updates,
 improvements, bug fixes, and new features by version.
 
 ## Releases
+### 0.8.0 - 2026-11-03
+#### Features
+ - Mark stacks such as the proxy and monitoring as shared infrastructure from the Customers page. They get their own group on the dashboard and billing, with their share reported but never billed, so Unassigned only holds stacks that still need a home
+
 ### 0.7.1 - 2026-11-03
 #### Changes
  - The version now shows the commit the running build came from, such as v0.7.1+5e13aef

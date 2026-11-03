@@ -205,7 +205,11 @@ Track__S3PollIntervalSeconds     optional, default 900
 - **Customer**: a `Customer` row with a set of `StackAssignment` rows (one per stack
   name). Stack names are matched case-insensitively and are unique across customers —
   assigning a stack that already belongs to another customer moves it.
-- Stacks not assigned to any customer appear under the "Unassigned stacks" group.
+- **Shared infrastructure**: a `SharedStack` row marks a stack that serves the whole cluster (proxy,
+  orchestration, monitoring). A stack belongs to at most one of a customer or shared infrastructure;
+  assigning it to either moves it (`PUT /stacks/shared`, `PUT /customers/{id}/stacks`). The shared group
+  is reported (dashboard, billing, `BillingSample.IsShared`) but never billed, like unassigned.
+- Stacks in neither appear under the "Unassigned stacks" group, which should normally be empty.
 
 ### Label-less standalone containers (env-var identity)
 

@@ -48,6 +48,7 @@ export interface StackGroupDto {
 export interface CustomerGroupDto {
   customerId: number | null
   customerName: string | null
+  isShared: boolean
   totals: UsageTotalsDto
   stacks: StackGroupDto[]
   buckets: BucketUsageDto[]
@@ -84,6 +85,7 @@ export interface BillingCapacityDto {
 export interface BillingCustomerDto {
   customerId: number | null
   customerName: string | null
+  isShared: boolean
   cpuPercent: number
   memoryUsedBytes: number
   diskBytes: number

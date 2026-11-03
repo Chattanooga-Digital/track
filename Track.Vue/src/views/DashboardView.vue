@@ -26,7 +26,11 @@ function shareBar(share: number): number {
 }
 
 function customerKey(group: CustomerGroupDto): string {
-  return `${group.customerId ?? 'none'}`
+  return `${group.customerId ?? (group.isShared ? 'shared' : 'unassigned')}`
+}
+
+function groupName(group: CustomerGroupDto): string {
+  return group.customerName ?? (group.isShared ? 'Shared infrastructure' : 'Unassigned stacks')
 }
 
 function stackKey(group: CustomerGroupDto, stack: StackGroupDto): string {
@@ -159,11 +163,17 @@ function customerSummary(group: CustomerGroupDto): string {
 
     <v-card v-for="group in customers" :key="customerKey(group)" variant="flat" border class="mb-5">
       <div class="d-flex flex-wrap align-center ga-4 px-5 py-4 row-border">
-        <div class="d-flex align-baseline ga-3 customer-name">
-          <h2 class="text-subtitle-1 font-weight-medium">
-            {{ group.customerName ?? 'Unassigned stacks' }}
-          </h2>
+        <div class="d-flex flex-wrap align-center ga-3 customer-name">
+          <h2 class="text-subtitle-1 font-weight-medium">{{ groupName(group) }}</h2>
           <span class="text-caption text-medium-emphasis">{{ customerSummary(group) }}</span>
+          <v-chip v-if="group.isShared" size="x-small" variant="tonal">Not billed</v-chip>
+          <v-chip
+            v-else-if="group.customerId === null"
+            size="x-small"
+            color="warning"
+            variant="tonal"
+            >Not billed · assign to a customer or shared infrastructure</v-chip
+          >
         </div>
         <dl class="d-flex flex-wrap ga-6">
           <div>
@@ -192,7 +202,7 @@ function customerSummary(group: CustomerGroupDto): string {
       </div>
 
       <div class="table-scroll">
-        <div role="table" :aria-label="`${group.customerName ?? 'Unassigned'} stacks`">
+        <div role="table" :aria-label="`${groupName(group)} stacks`">
           <div
             role="row"
             class="usage-grid header-row text-caption text-medium-emphasis row-border"

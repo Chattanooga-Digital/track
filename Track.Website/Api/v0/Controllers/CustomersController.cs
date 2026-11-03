@@ -105,7 +105,7 @@ public class CustomersController(
         return Ok();
     }
 
-    /// <summary>Replaces the customer's assigned stacks; stacks already assigned elsewhere are moved here.</summary>
+    /// <summary>Replaces the customer's assigned stacks; stacks assigned elsewhere or shared are moved here.</summary>
     [HttpPut("{id:int}/stacks")]
     public async Task<IActionResult> SetStacks(
         [FromRoute] int id, [FromBody] List<string> stackNames, CancellationToken cancellationToken)
@@ -135,6 +135,10 @@ public class CustomersController(
 
         TrackContext.StackAssignments.RemoveRange(customer.StackAssignments
             .Where(a => !names.Contains(a.StackName, StringComparer.OrdinalIgnoreCase)));
+
+        TrackContext.SharedStacks.RemoveRange(await TrackContext.SharedStacks
+            .Where(s => names.Contains(s.StackName))
+            .ToListAsync(cancellationToken));
 
         await TrackContext.SaveChangesAsync(cancellationToken);
 

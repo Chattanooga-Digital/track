@@ -36,12 +36,14 @@ public class BillingCapacityModel
 /// <summary>
 /// One customer's month-average usage. Averages divide by the month's total tick count, so a
 /// customer present for half the month bills half of its while-present average. A null
-/// <see cref="CustomerId"/> is the unassigned (unbilled) remainder.
+/// <see cref="CustomerId"/> is an unbilled group: shared infrastructure when <see cref="IsShared"/>,
+/// otherwise the unassigned remainder.
 /// </summary>
 public class BillingCustomerModel
 {
     public int? CustomerId { get; set; }
     public string? CustomerName { get; set; }
+    public bool IsShared { get; set; }
     public double CpuPercent { get; set; }
     public double MemoryUsedBytes { get; set; }
     public double DiskBytes { get; set; }
@@ -50,7 +52,7 @@ public class BillingCustomerModel
     public double MemoryPercentOfCluster { get; set; }
     public double BlendedPercentOfCluster { get; set; }
 
-    /// <summary>Compute charge: share of the recovered cluster cost. $0 for the unassigned remainder.</summary>
+    /// <summary>Compute charge: share of the recovered cluster cost. $0 for the unbilled groups.</summary>
     public decimal ComputeCost { get; set; }
     public decimal DiskCost { get; set; }
     public decimal ObjectStorageCost { get; set; }

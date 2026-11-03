@@ -37,6 +37,7 @@ public class BillingSampleRecorder(TrackContext trackContext, SnapshotBuilder sn
                 Timestamp = snapshot.Timestamp,
                 CustomerId = customer.CustomerId,
                 CustomerName = customer.CustomerName,
+                IsShared = customer.IsShared,
                 CpuPercent = customer.Totals.CpuPercent,
                 MemoryUsedBytes = customer.Totals.MemoryUsedBytes,
                 DiskBytes = customer.Totals.DiskBytes,

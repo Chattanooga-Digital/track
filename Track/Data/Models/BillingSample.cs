@@ -8,7 +8,8 @@ namespace Track.Data.Models;
 /// record time. Billing history must be recorded as it happens: cluster capacity lives only
 /// in memory and raw samples are pruned long before a billing period closes, and the
 /// customer attribution here reflects the stack/bucket assignments as they were, not as
-/// they are now. A null <see cref="CustomerId"/> is the unassigned (unbilled) remainder.
+/// they are now. A null <see cref="CustomerId"/> is an unbilled group: shared infrastructure when
+/// <see cref="IsShared"/>, otherwise the unassigned remainder.
 /// </summary>
 public class BillingSample : IEntityTypeConfiguration<BillingSample>
 {
@@ -20,6 +21,8 @@ public class BillingSample : IEntityTypeConfiguration<BillingSample>
 
     /// <summary>Denormalized so a deleted customer's past bills still carry a name.</summary>
     public string? CustomerName { get; set; }
+
+    public bool IsShared { get; set; }
 
     public double CpuPercent { get; set; }
     public long MemoryUsedBytes { get; set; }

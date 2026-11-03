@@ -112,10 +112,11 @@ public class StatsController(
 
         var groups = await TrackContext.BillingSamples.AsNoTracking()
             .Where(s => s.Timestamp >= from && s.Timestamp < to)
-            .GroupBy(s => s.CustomerId)
+            .GroupBy(s => new { s.CustomerId, s.IsShared })
             .Select(g => new
             {
-                CustomerId = g.Key,
+                g.Key.CustomerId,
+                g.Key.IsShared,
                 CustomerName = g.Max(s => s.CustomerName),
                 CpuPercent = g.Sum(s => s.CpuPercent),
                 MemoryUsedBytes = g.Sum(s => (double)s.MemoryUsedBytes),
@@ -138,6 +139,7 @@ public class StatsController(
             {
                 CustomerId = g.CustomerId,
                 CustomerName = g.CustomerId is int id && currentNames.TryGetValue(id, out var name) ? name : g.CustomerName,
+                IsShared = g.IsShared,
                 CpuPercent = g.CpuPercent / sampleCount,
                 MemoryUsedBytes = g.MemoryUsedBytes / sampleCount,
                 DiskBytes = g.DiskBytes / sampleCount,

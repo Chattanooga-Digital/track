@@ -55,6 +55,7 @@ watch(period, async (value) => {
 interface BillingRow {
   customerId: number | null
   customerName: string | null
+  isShared: boolean
   diskBytes: number
   objectStorageBytes: number
   blendedPercentOfCluster: number
@@ -69,6 +70,7 @@ const allRows = computed<BillingRow[]>(() =>
     ? customers.value.map((c) => ({
         customerId: c.customerId,
         customerName: c.customerName,
+        isShared: c.isShared,
         diskBytes: c.totals.diskBytes,
         objectStorageBytes: c.totals.objectStorageBytes,
         blendedPercentOfCluster: c.totals.blendedPercentOfCluster,
@@ -84,7 +86,16 @@ const rows = computed(() =>
   allRows.value.filter((c) => c.customerId !== null).sort((a, b) => b.totalCost - a.totalCost),
 )
 
-const unassigned = computed(() => allRows.value.find((c) => c.customerId === null))
+const shared = computed(() => allRows.value.find((c) => c.isShared))
+const unassigned = computed(() => allRows.value.find((c) => c.customerId === null && !c.isShared))
+const unbilledRows = computed(() =>
+  [shared.value, unassigned.value]
+    .filter((row): row is BillingRow => row !== undefined)
+    .map((row) => ({
+      ...row,
+      name: row.isShared ? 'Shared infrastructure' : 'Unassigned stacks',
+    })),
+)
 
 const currency = computed(
   () => (isLive.value ? snapshot.value?.currency : monthData.value?.currency) ?? 'USD',
@@ -230,11 +241,23 @@ async function saveRates() {
         <div class="text-caption text-medium-emphasis">Blended CPU and memory</div>
       </v-card>
       <v-card variant="flat" border class="pa-4">
-        <div class="text-caption text-medium-emphasis">Unassigned overhead</div>
+        <div class="text-caption text-medium-emphasis">Shared infrastructure</div>
         <div class="text-h5 font-weight-medium my-1">
+          {{ pct(shared?.blendedPercentOfCluster ?? 0) }}
+        </div>
+        <div class="text-caption text-medium-emphasis">Not billed; spread across customers</div>
+      </v-card>
+      <v-card variant="flat" border class="pa-4">
+        <div class="text-caption text-medium-emphasis">Unassigned</div>
+        <div
+          class="text-h5 font-weight-medium my-1"
+          :class="{ 'text-warning': (unassigned?.blendedPercentOfCluster ?? 0) > 0 }"
+        >
           {{ pct(unassigned?.blendedPercentOfCluster ?? 0) }}
         </div>
-        <div class="text-caption text-medium-emphasis">Spread across customers</div>
+        <div class="text-caption text-medium-emphasis">
+          Not billed; assign to a customer or shared infrastructure
+        </div>
       </v-card>
       <v-card variant="flat" border class="pa-4">
         <div class="text-caption text-medium-emphasis">
@@ -301,6 +324,25 @@ async function saveRates() {
             </div>
           </div>
 
+          <div
+            v-for="u in unbilledRows"
+            :key="u.name"
+            role="row"
+            class="billing-grid customer-row row-border text-medium-emphasis"
+          >
+            <div role="cell" class="d-flex flex-wrap align-center ga-2">
+              <span class="font-weight-medium">{{ u.name }}</span>
+              <v-chip size="x-small" variant="tonal" :color="u.isShared ? undefined : 'warning'"
+                >Not billed</v-chip
+              >
+            </div>
+            <div role="cell" class="text-body-2">{{ pct(u.blendedPercentOfCluster) }}</div>
+            <div role="cell" class="text-right">{{ money(u.computeCost) }}</div>
+            <div role="cell" class="text-right">{{ formatBytes(u.diskBytes) }}</div>
+            <div role="cell" class="text-right">{{ formatBytes(u.objectStorageBytes) }}</div>
+            <div role="cell" class="text-right">{{ money(u.totalCost) }}</div>
+          </div>
+
           <div v-if="noMonthData" class="text-center text-medium-emphasis py-6">
             No billing samples recorded for this month.
           </div>
@@ -314,8 +356,8 @@ async function saveRates() {
           <div v-if="rows.length > 0" role="row" class="billing-grid total-row font-weight-medium">
             <div role="cell">Total</div>
             <div role="cell" class="text-body-2 text-medium-emphasis">
-              {{ pct(billedShare) }} billed · {{ pct(unassigned?.blendedPercentOfCluster ?? 0) }}
-              overhead
+              {{ pct(billedShare) }} billed · {{ pct(shared?.blendedPercentOfCluster ?? 0) }} shared
+              · {{ pct(unassigned?.blendedPercentOfCluster ?? 0) }} unassigned
             </div>
             <div role="cell" class="text-right">{{ money(totals?.computeCost) }}</div>
             <div role="cell" class="text-right">{{ money(totals?.diskCost) }}</div>
@@ -331,8 +373,8 @@ async function saveRates() {
     <p class="explanation text-body-2 text-medium-emphasis mt-4">
       <template v-if="isLive">
         The cluster's monthly cost is recovered in full from paying customers, split by their
-        blended CPU and memory share, so idle capacity and unassigned overhead are spread across
-        them. Disk and object storage bill per GB at the rates set under Rates.
+        blended CPU and memory share, so idle capacity, shared infrastructure and unassigned stacks
+        are spread across them. Disk and object storage bill per GB at the rates set under Rates.
       </template>
       <template v-else>
         Averages of {{ monthData?.sampleCount ?? 0 }} samples across the month, priced at the

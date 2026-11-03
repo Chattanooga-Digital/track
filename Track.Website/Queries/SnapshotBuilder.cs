@@ -28,6 +28,12 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
             .SelectMany(c => c.StackAssignments.Select(a => (a.StackName, c.Id)))
             .ToDictionary(x => x.StackName, x => x.Id, StringComparer.OrdinalIgnoreCase);
 
+        var sharedStackNames = (await _metricsContext.SharedStacks
+                .AsNoTracking()
+                .Select(s => s.StackName)
+                .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var customerIdByBucket = customers
             .SelectMany(c => c.BucketAssignments.Select(a => (Key: BucketKey(a.SourceName, a.BucketName), c.Id)))
             .ToDictionary(x => x.Key, x => x.Id, StringComparer.OrdinalIgnoreCase);
@@ -110,12 +116,16 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
             snapshot.Customers.Add(group);
         }
 
+        var shared = new CustomerGroupModel { IsShared = true };
         var unassigned = new CustomerGroupModel();
         foreach (var stack in stackGroups)
         {
-            var group = stack.StackName is not null && customerIdByStack.TryGetValue(stack.StackName, out var customerId)
-                ? groupsByCustomerId[customerId]
-                : unassigned;
+            var group = stack.StackName switch
+            {
+                not null when customerIdByStack.TryGetValue(stack.StackName, out var customerId) => groupsByCustomerId[customerId],
+                not null when sharedStackNames.Contains(stack.StackName) => shared,
+                _ => unassigned,
+            };
             group.Stacks.Add(stack);
         }
 
@@ -133,6 +143,8 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
             });
         }
 
+        if (shared.Stacks.Count > 0)
+            snapshot.Customers.Add(shared);
         if (unassigned.Stacks.Count > 0 || unassigned.Buckets.Count > 0)
             snapshot.Customers.Add(unassigned);
 
@@ -171,7 +183,7 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
 
     /// <summary>
     /// Turns the blended shares into dollars. Compute is full cost recovery: the fixed cluster cost is spread
-    /// across paying customers by blended footprint (unassigned excluded from the denominator), so customer
+    /// across paying customers by blended footprint (shared and unassigned excluded from the denominator), so customer
     /// bills sum to the cluster cost. Storage is a flat per-GB markup on assigned usage.
     /// </summary>
     private async Task ApplyCostsAsync(SnapshotModel snapshot, CancellationToken cancellationToken)

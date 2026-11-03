@@ -10,7 +10,7 @@ import {
   setCustomerStacks,
   setCustomerBuckets,
 } from '@/api/customersApi'
-import { getStacks } from '@/api/stacksApi'
+import { getStacks, setSharedStacks } from '@/api/stacksApi'
 import { getBuckets } from '@/api/bucketsApi'
 
 const customers = ref<CustomerDto[]>([])
@@ -31,9 +31,15 @@ const editDialog = ref(false)
 const editing = ref<CustomerDto | null>(null)
 const form = ref({ name: '', notes: '' })
 
+const SHARED = 'shared'
+
 const stacksDialog = ref(false)
-const stacksTarget = ref<CustomerDto | null>(null)
+const stacksTarget = ref<CustomerDto | typeof SHARED | null>(null)
 const selectedStacks = ref<string[]>([])
+
+const sharedStackNames = computed(() =>
+  stacks.value.filter((s) => s.isShared).map((s) => s.stackName),
+)
 
 const bucketsDialog = ref(false)
 const bucketsTarget = ref<CustomerDto | null>(null)
@@ -54,15 +60,26 @@ async function refresh() {
 
 onMounted(refresh)
 
-// Stacks owned by another customer are shown but flagged, since assigning moves them here.
+const stacksTargetName = computed(() =>
+  stacksTarget.value === SHARED ? 'shared infrastructure' : stacksTarget.value?.name,
+)
+
+// Stacks owned elsewhere are shown but flagged, since assigning moves them here.
+function currentOwner(stack: StackDto): string | null {
+  const target = stacksTarget.value
+  if (stack.isShared) return target === SHARED ? null : 'shared infrastructure'
+  if (stack.customerName === null) return null
+  return target !== SHARED && stack.customerId === target?.id ? null : stack.customerName
+}
+
 const stackOptions = computed(() =>
-  stacks.value.map((s) => ({
-    title:
-      s.customerName && s.customerId !== stacksTarget.value?.id
-        ? `${s.stackName} (currently ${s.customerName})`
-        : s.stackName,
-    value: s.stackName,
-  })),
+  stacks.value.map((s) => {
+    const owner = currentOwner(s)
+    return {
+      title: owner ? `${s.stackName} (currently ${owner})` : s.stackName,
+      value: s.stackName,
+    }
+  }),
 )
 
 // Buckets owned by another customer are shown but flagged, since assigning moves them here.
@@ -116,9 +133,20 @@ function openStacks(customer: CustomerDto) {
   stacksDialog.value = true
 }
 
+function openSharedStacks() {
+  stacksTarget.value = SHARED
+  selectedStacks.value = [...sharedStackNames.value]
+  stacksDialog.value = true
+}
+
 async function saveStacks() {
-  if (!stacksTarget.value) return
-  await setCustomerStacks(stacksTarget.value.id, selectedStacks.value)
+  const target = stacksTarget.value
+  if (!target) return
+  if (target === SHARED) {
+    await setSharedStacks(selectedStacks.value)
+  } else {
+    await setCustomerStacks(target.id, selectedStacks.value)
+  }
   stacksDialog.value = false
   await refresh()
 }
@@ -146,6 +174,35 @@ async function saveBuckets() {
     </div>
 
     <v-progress-linear v-if="loading" indeterminate />
+
+    <v-card variant="outlined" class="mb-4">
+      <div class="d-flex align-start ga-4 pa-4">
+        <div class="flex-grow-1">
+          <div class="text-subtitle-1 font-weight-medium">Shared infrastructure</div>
+          <div class="text-body-2 text-medium-emphasis mb-2">
+            Stacks that serve the whole cluster, such as the proxy and monitoring. Reported on the
+            dashboard and billing, never billed.
+          </div>
+          <v-chip
+            v-for="name in sharedStackNames"
+            :key="name"
+            size="x-small"
+            class="ma-1"
+            variant="tonal"
+          >
+            {{ name }}
+          </v-chip>
+          <span v-if="sharedStackNames.length === 0" class="text-medium-emphasis">None</span>
+        </div>
+        <v-btn
+          size="small"
+          variant="text"
+          icon="mdi-layers-edit"
+          aria-label="Edit shared infrastructure stacks"
+          @click="openSharedStacks"
+        />
+      </div>
+    </v-card>
 
     <v-card variant="outlined">
       <v-table>
@@ -234,7 +291,7 @@ async function saveBuckets() {
 
     <v-dialog v-model="stacksDialog" max-width="520">
       <v-card>
-        <v-card-title>Assign stacks to {{ stacksTarget?.name }}</v-card-title>
+        <v-card-title>Assign stacks to {{ stacksTargetName }}</v-card-title>
         <v-card-text>
           <v-select
             v-model="selectedStacks"

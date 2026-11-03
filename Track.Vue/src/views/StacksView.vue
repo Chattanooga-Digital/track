@@ -91,7 +91,10 @@ watch([selectedStack, hours], loadHistory)
               </template>
               <v-list-item-title>{{ stack.stackName }}</v-list-item-title>
               <v-list-item-subtitle>
-                {{ stack.customerName ?? 'Unassigned' }} · {{ stack.containerCount }} running
+                {{
+                  stack.customerName ?? (stack.isShared ? 'Shared infrastructure' : 'Unassigned')
+                }}
+                · {{ stack.containerCount }} running
               </v-list-item-subtitle>
             </v-list-item>
           </v-list>

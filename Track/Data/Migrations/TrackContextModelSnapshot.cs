@@ -168,6 +168,9 @@ namespace Track.Data.Migrations
                     b.Property<long>("DiskBytes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsShared")
+                        .HasColumnType("INTEGER");
+
                     b.Property<double>("MemoryPercentOfCluster")
                         .HasColumnType("REAL");
 
@@ -454,6 +457,25 @@ namespace Track.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("S3Sources");
+                });
+
+            modelBuilder.Entity("Track.Data.Models.SharedStack", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StackName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StackName")
+                        .IsUnique();
+
+                    b.ToTable("SharedStacks");
                 });
 
             modelBuilder.Entity("Track.Data.Models.StackAssignment", b =>

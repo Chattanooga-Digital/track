@@ -5,6 +5,7 @@ public class StackModel
     public required string StackName { get; set; }
     public int? CustomerId { get; set; }
     public string? CustomerName { get; set; }
+    public bool IsShared { get; set; }
     public int ContainerCount { get; set; }
     public bool IsActive { get; set; }
 }

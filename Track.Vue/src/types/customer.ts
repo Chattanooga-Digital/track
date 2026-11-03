@@ -30,6 +30,7 @@ export interface StackDto {
   stackName: string
   customerId: number | null
   customerName: string | null
+  isShared: boolean
   containerCount: number
   isActive: boolean
 }
