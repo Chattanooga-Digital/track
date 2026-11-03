@@ -52,7 +52,7 @@ onMounted(refresh)
 </script>
 
 <template>
-  <v-container fluid>
+  <div class="track-page">
     <div class="d-flex align-center mb-4 ga-4 flex-wrap">
       <h1 class="text-h5">Unidentified containers</h1>
       <v-spacer />
@@ -173,5 +173,5 @@ onMounted(refresh)
     >
       {{ snackbar }}
     </v-snackbar>
-  </v-container>
+  </div>
 </template>

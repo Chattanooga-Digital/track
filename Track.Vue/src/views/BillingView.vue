@@ -25,10 +25,13 @@ function monthTitle(month: string): string {
   })
 }
 
-const periodItems = computed(() => [
-  { title: 'Live', value: LIVE },
-  ...months.value.map((m) => ({ title: monthTitle(m), value: m })),
-])
+const MONTHS_PINNED = 2
+
+const olderMonths = computed(() => months.value.slice(MONTHS_PINNED))
+const pinnedMonths = computed(() => {
+  const pinned = months.value.slice(0, MONTHS_PINNED)
+  return olderMonths.value.includes(period.value) ? [...pinned, period.value] : pinned
+})
 
 const isLive = computed(() => period.value === LIVE)
 
@@ -106,6 +109,14 @@ const totalBlended = computed(() =>
     : allRows.value.reduce((sum, c) => sum + c.blendedPercentOfCluster, 0),
 )
 const totalBilled = computed(() => totals.value?.totalCost ?? 0)
+const billedShare = computed(() =>
+  rows.value.reduce((sum, c) => sum + c.blendedPercentOfCluster, 0),
+)
+
+function shareOfCompute(row: BillingRow): number {
+  const compute = totals.value?.computeCost ?? 0
+  return compute > 0 ? (row.computeCost / compute) * 100 : 0
+}
 
 const noMonthData = computed(
   () => !isLive.value && !loading.value && (monthData.value?.sampleCount ?? 0) === 0,
@@ -159,133 +170,173 @@ async function saveRates() {
 </script>
 
 <template>
-  <v-container fluid>
-    <div class="d-flex align-center mb-4 flex-wrap ga-4">
-      <h1 class="text-h5">Billing &mdash; Cost Recovery</h1>
-      <v-spacer />
-      <v-btn variant="tonal" prepend-icon="mdi-cog" @click="openRateDialog">Rates</v-btn>
-      <v-select
-        v-model="period"
-        :items="periodItems"
-        label="Billing period"
-        density="compact"
-        variant="outlined"
-        hide-details
-        style="max-width: 220px"
-      />
+  <div class="track-page">
+    <div class="d-flex flex-wrap align-end justify-space-between ga-4 mb-6">
+      <div>
+        <h1 class="text-h5 font-weight-medium">Billing</h1>
+        <div class="text-body-2 text-medium-emphasis">
+          {{ isLive ? 'Monthly run rate at current usage' : monthTitle(period) }}
+        </div>
+      </div>
+      <div class="d-flex flex-wrap align-center ga-2">
+        <v-btn-toggle
+          v-model="period"
+          mandatory
+          divided
+          variant="outlined"
+          density="comfortable"
+          aria-label="Billing period"
+        >
+          <v-btn :value="LIVE">Live</v-btn>
+          <v-btn v-for="m in pinnedMonths" :key="m" :value="m">{{ monthTitle(m) }}</v-btn>
+        </v-btn-toggle>
+        <v-menu v-if="olderMonths.length > 0">
+          <template #activator="{ props }">
+            <v-btn v-bind="props" variant="text" append-icon="mdi-chevron-down">Earlier</v-btn>
+          </template>
+          <v-list density="compact">
+            <v-list-item
+              v-for="m in olderMonths"
+              :key="m"
+              :title="monthTitle(m)"
+              :active="period === m"
+              @click="period = m"
+            />
+          </v-list>
+        </v-menu>
+        <v-btn variant="outlined" prepend-icon="mdi-tune-variant" @click="openRateDialog"
+          >Rates</v-btn
+        >
+      </div>
     </div>
 
-    <v-row class="mb-2">
-      <v-col cols="12" md="3">
-        <v-card variant="outlined">
-          <v-card-text>
-            <div class="text-caption text-medium-emphasis">
-              {{ isLive ? 'Cluster capacity' : 'Average cluster capacity' }}
-            </div>
-            <div class="text-h6">
-              {{ cores(capacity?.cpuCores) }} vCPU &middot; {{ formatBytes(capacity?.memoryBytes) }}
-            </div>
-            <div class="text-caption text-medium-emphasis">
-              {{ cores(capacity?.nodeCount) }} node(s)
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="3">
-        <v-card variant="outlined">
-          <v-card-text>
-            <div class="text-caption text-medium-emphasis">Total billed</div>
-            <div class="text-h4">{{ money(totalBilled) }}</div>
-            <div class="text-caption text-medium-emphasis">Recovered across customers</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="3">
-        <v-card variant="outlined">
-          <v-card-text>
-            <div class="text-caption text-medium-emphasis">
-              {{ isLive ? 'Cluster utilization' : 'Average utilization' }}
-            </div>
-            <div class="text-h4">{{ pct(totalBlended) }}</div>
-            <div class="text-caption text-medium-emphasis">Blended CPU + memory</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="3">
-        <v-card variant="outlined">
-          <v-card-text>
-            <div class="text-caption text-medium-emphasis">Unassigned</div>
-            <div class="text-h4">{{ pct(unassigned?.blendedPercentOfCluster ?? 0) }}</div>
-            <div class="text-caption text-medium-emphasis">
-              Overhead spread across customers via the base rate
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
+    <div class="stat-grid mb-6">
+      <v-card variant="flat" border class="pa-4">
+        <div class="text-caption text-medium-emphasis">Total billed</div>
+        <div class="text-h5 font-weight-medium my-1">{{ money(totalBilled) }}</div>
+        <div class="text-caption text-medium-emphasis">
+          {{
+            isLive
+              ? 'Per month at current usage'
+              : `Average of ${monthData?.sampleCount ?? 0} samples`
+          }}
+        </div>
+      </v-card>
+      <v-card variant="flat" border class="pa-4">
+        <div class="text-caption text-medium-emphasis">
+          {{ isLive ? 'Cluster utilization' : 'Average utilization' }}
+        </div>
+        <div class="text-h5 font-weight-medium my-1">{{ pct(totalBlended) }}</div>
+        <div class="text-caption text-medium-emphasis">Blended CPU and memory</div>
+      </v-card>
+      <v-card variant="flat" border class="pa-4">
+        <div class="text-caption text-medium-emphasis">Unassigned overhead</div>
+        <div class="text-h5 font-weight-medium my-1">
+          {{ pct(unassigned?.blendedPercentOfCluster ?? 0) }}
+        </div>
+        <div class="text-caption text-medium-emphasis">Spread across customers</div>
+      </v-card>
+      <v-card variant="flat" border class="pa-4">
+        <div class="text-caption text-medium-emphasis">
+          {{ isLive ? 'Capacity' : 'Average capacity' }}
+        </div>
+        <div class="text-h5 font-weight-medium my-1">
+          {{ cores(capacity?.cpuCores) }} vCPU · {{ formatBytes(capacity?.memoryBytes) }}
+        </div>
+        <div class="text-caption text-medium-emphasis">
+          {{ cores(capacity?.nodeCount) }} node{{ capacity?.nodeCount === 1 ? '' : 's' }}
+        </div>
+      </v-card>
+    </div>
 
-    <v-card variant="outlined" :loading="loading">
-      <v-table>
-        <thead>
-          <tr>
-            <th>Customer</th>
-            <th class="text-right">Blended %</th>
-            <th class="text-right">Compute</th>
-            <th class="text-right">Disk</th>
-            <th class="text-right">Disk cost</th>
-            <th class="text-right">Object storage</th>
-            <th class="text-right">Object cost</th>
-            <th class="text-right">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="c in rows" :key="c.customerId ?? 'none'">
-            <td class="font-weight-medium">{{ c.customerName }}</td>
-            <td class="text-right">{{ pct(c.blendedPercentOfCluster) }}</td>
-            <td class="text-right">{{ money(c.computeCost) }}</td>
-            <td class="text-right">{{ formatBytes(c.diskBytes) }}</td>
-            <td class="text-right">{{ money(c.diskCost) }}</td>
-            <td class="text-right">{{ formatBytes(c.objectStorageBytes) }}</td>
-            <td class="text-right">{{ money(c.objectStorageCost) }}</td>
-            <td class="text-right font-weight-bold">{{ money(c.totalCost) }}</td>
-          </tr>
-          <tr v-if="noMonthData">
-            <td colspan="8" class="text-center text-medium-emphasis py-6">
-              No billing samples recorded for this month.
-            </td>
-          </tr>
-          <tr v-else-if="rows.length === 0 && !loading">
-            <td colspan="8" class="text-center text-medium-emphasis py-6">
-              No customers yet. Assign stacks to customers to see billing shares.
-            </td>
-          </tr>
-        </tbody>
-        <tfoot v-if="rows.length > 0">
-          <tr class="font-weight-bold">
-            <td>Total</td>
-            <td class="text-right">{{ pct(totalBlended) }}</td>
-            <td class="text-right">{{ money(totals?.computeCost) }}</td>
-            <td></td>
-            <td class="text-right">{{ money(totals?.diskCost) }}</td>
-            <td></td>
-            <td class="text-right">{{ money(totals?.objectStorageCost) }}</td>
-            <td class="text-right">{{ money(totalBilled) }}</td>
-          </tr>
-        </tfoot>
-      </v-table>
+    <v-card variant="flat" border :loading="loading">
+      <div class="table-scroll">
+        <div role="table" aria-label="Charges by customer">
+          <div
+            role="row"
+            class="billing-grid header-row text-caption text-medium-emphasis row-border"
+          >
+            <div role="columnheader">Customer</div>
+            <div role="columnheader">Share of cluster</div>
+            <div role="columnheader" class="text-right">Compute</div>
+            <div role="columnheader" class="text-right">Disk</div>
+            <div role="columnheader" class="text-right">Object storage</div>
+            <div role="columnheader" class="text-right">Total</div>
+          </div>
+
+          <div
+            v-for="c in rows"
+            :key="c.customerId ?? 'none'"
+            role="row"
+            class="billing-grid customer-row row-border"
+          >
+            <div role="cell" class="font-weight-medium">{{ c.customerName }}</div>
+            <div role="cell">
+              <div class="d-flex justify-space-between text-body-2 mb-1">
+                <span>{{ pct(c.blendedPercentOfCluster) }}</span>
+                <span class="text-medium-emphasis"
+                  >{{ shareOfCompute(c).toFixed(1) }}% of compute</span
+                >
+              </div>
+              <v-progress-linear
+                :model-value="shareOfCompute(c)"
+                color="primary"
+                height="6"
+                rounded
+              />
+            </div>
+            <div role="cell" class="text-right">{{ money(c.computeCost) }}</div>
+            <div role="cell" class="text-right">
+              <div>{{ money(c.diskCost) }}</div>
+              <div class="text-caption text-medium-emphasis">{{ formatBytes(c.diskBytes) }}</div>
+            </div>
+            <div role="cell" class="text-right">
+              <div>{{ money(c.objectStorageCost) }}</div>
+              <div class="text-caption text-medium-emphasis">
+                {{ formatBytes(c.objectStorageBytes) }}
+              </div>
+            </div>
+            <div role="cell" class="text-right text-subtitle-1 font-weight-medium">
+              {{ money(c.totalCost) }}
+            </div>
+          </div>
+
+          <div v-if="noMonthData" class="text-center text-medium-emphasis py-6">
+            No billing samples recorded for this month.
+          </div>
+          <div
+            v-else-if="rows.length === 0 && !loading"
+            class="text-center text-medium-emphasis py-6"
+          >
+            No customers yet. Assign stacks to customers to see billing shares.
+          </div>
+
+          <div v-if="rows.length > 0" role="row" class="billing-grid total-row font-weight-medium">
+            <div role="cell">Total</div>
+            <div role="cell" class="text-body-2 text-medium-emphasis">
+              {{ pct(billedShare) }} billed · {{ pct(unassigned?.blendedPercentOfCluster ?? 0) }}
+              overhead
+            </div>
+            <div role="cell" class="text-right">{{ money(totals?.computeCost) }}</div>
+            <div role="cell" class="text-right">{{ money(totals?.diskCost) }}</div>
+            <div role="cell" class="text-right">{{ money(totals?.objectStorageCost) }}</div>
+            <div role="cell" class="text-right text-subtitle-1 font-weight-medium">
+              {{ money(totalBilled) }}
+            </div>
+          </div>
+        </div>
+      </div>
     </v-card>
 
-    <p class="text-caption text-medium-emphasis mt-3">
+    <p class="explanation text-body-2 text-medium-emphasis mt-4">
       <template v-if="isLive">
-        Compute is billed as a utility: the cluster's monthly cost is recovered in full from paying
-        customers, split by blended CPU + memory footprint, so idle capacity and unassigned overhead
-        are spread across customers rather than absorbed. Disk and object storage bill at a flat
-        per-GB rate. Set the rates with the button above. Pick a month for the billable average.
+        The cluster's monthly cost is recovered in full from paying customers, split by their
+        blended CPU and memory share, so idle capacity and unassigned overhead are spread across
+        them. Disk and object storage bill per GB at the rates set under Rates.
       </template>
       <template v-else>
-        Month figures are the average of {{ monthData?.sampleCount ?? 0 }} billing samples across
-        the month, priced at the current rates. A customer present for part of the month is averaged
-        over the whole month, so partial months bill proportionally.
+        Averages of {{ monthData?.sampleCount ?? 0 }} samples across the month, priced at the
+        current rates. A customer present for part of the month bills proportionally.
       </template>
     </p>
 
@@ -340,5 +391,51 @@ async function saveRates() {
         </v-card-actions>
       </v-card>
     </v-dialog>
-  </v-container>
+  </div>
 </template>
+
+<style scoped>
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.row-border {
+  border-bottom: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.table-scroll > [role='table'] {
+  min-width: 760px;
+}
+
+.billing-grid {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) 200px 110px 110px 130px 120px;
+  gap: 16px;
+  align-items: center;
+  padding: 0 20px;
+}
+
+.header-row {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.customer-row {
+  min-height: 60px;
+}
+
+.total-row {
+  min-height: 52px;
+  background: rgba(var(--v-theme-on-surface), 0.03);
+}
+
+.explanation {
+  max-width: 68ch;
+}
+</style>

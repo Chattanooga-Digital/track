@@ -137,7 +137,7 @@ const canSave = () =>
 </script>
 
 <template>
-  <v-container fluid>
+  <div class="track-page">
     <div class="d-flex align-center mb-4">
       <h1 class="text-h5">Object Storage Sources</h1>
       <v-spacer />
@@ -266,5 +266,5 @@ const canSave = () =>
         </v-card-actions>
       </v-card>
     </v-dialog>
-  </v-container>
+  </div>
 </template>

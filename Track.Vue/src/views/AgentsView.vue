@@ -45,7 +45,7 @@ function absoluteTime(iso: string | null): string {
 </script>
 
 <template>
-  <v-container fluid>
+  <div class="track-page">
     <div class="d-flex align-center mb-4 ga-3 flex-wrap">
       <h1 class="text-h5">Agents</h1>
       <v-chip
@@ -157,5 +157,5 @@ function absoluteTime(iso: string | null): string {
         </v-card-actions>
       </v-card>
     </v-dialog>
-  </v-container>
+  </div>
 </template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useDisplay } from 'vuetify'
 import { useSnapshotStore } from '@/stores/snapshotStore'
 import { useAuthStore } from '@/stores/authStore'
 import LoginView from '@/views/LoginView.vue'
@@ -8,8 +9,14 @@ import { getAbout } from '@/api/aboutApi'
 
 const snapshotStore = useSnapshotStore()
 const authStore = useAuthStore()
+const { mdAndUp } = useDisplay()
 const changePasswordOpen = ref(false)
+const drawerOpen = ref(false)
 const version = ref('')
+
+const unidentifiedCount = computed(() =>
+  snapshotStore.nodes.reduce((sum, node) => sum + node.unidentifiedContainers, 0),
+)
 
 onMounted(async () => {
   authStore.initialize()
@@ -48,106 +55,104 @@ async function logout() {
     </template>
 
     <template v-else>
-      <v-app-bar density="compact" color="surface">
-        <v-app-bar-title class="font-weight-bold">
-          <img
-            src="/logo.svg"
-            alt="Track"
-            height="24"
-            class="mr-2"
-            style="vertical-align: middle"
-          />
+      <v-app-bar v-if="!mdAndUp" density="compact" color="surface">
+        <v-app-bar-nav-icon aria-label="Open navigation" @click="drawerOpen = !drawerOpen" />
+        <v-app-bar-title class="font-weight-bold">Track</v-app-bar-title>
+      </v-app-bar>
+
+      <v-navigation-drawer
+        v-model="drawerOpen"
+        :permanent="mdAndUp"
+        :temporary="!mdAndUp"
+        width="240"
+        color="surface"
+      >
+        <div class="d-flex align-center ga-2 px-5 pt-5 pb-2 text-subtitle-1 font-weight-bold">
+          <img src="/logo.svg" alt="" height="24" />
           Track
-        </v-app-bar-title>
-        <template #append>
-          <v-btn to="/" variant="text" size="small" prepend-icon="mdi-view-dashboard"
-            >Dashboard</v-btn
-          >
-          <v-btn to="/billing" variant="text" size="small" prepend-icon="mdi-cash-multiple"
-            >Billing</v-btn
-          >
-          <v-btn to="/customers" variant="text" size="small" prepend-icon="mdi-account-group"
-            >Customers</v-btn
-          >
-          <v-btn to="/stacks" variant="text" size="small" prepend-icon="mdi-layers">Stacks</v-btn>
-          <v-btn to="/agents" variant="text" size="small" prepend-icon="mdi-server-network"
-            >Agents</v-btn
-          >
-          <v-btn to="/storage" variant="text" size="small" prepend-icon="mdi-database"
-            >Storage</v-btn
-          >
-          <v-btn to="/unidentified" variant="text" size="small" prepend-icon="mdi-help-network"
-            >Unidentified</v-btn
-          >
-          <v-btn
+        </div>
+
+        <v-list nav density="comfortable">
+          <v-list-subheader>Usage</v-list-subheader>
+          <v-list-item to="/" exact prepend-icon="mdi-view-dashboard" title="Dashboard" />
+          <v-list-item to="/billing" prepend-icon="mdi-cash-multiple" title="Billing" />
+
+          <v-list-subheader>Setup</v-list-subheader>
+          <v-list-item to="/customers" prepend-icon="mdi-account-group" title="Customers" />
+          <v-list-item to="/stacks" prepend-icon="mdi-layers" title="Stacks" />
+          <v-list-item to="/storage" prepend-icon="mdi-database" title="Storage" />
+          <v-list-item to="/unidentified" prepend-icon="mdi-help-network" title="Unidentified">
+            <template v-if="unidentifiedCount > 0" #append>
+              <v-chip size="x-small" color="warning" variant="tonal">{{
+                unidentifiedCount
+              }}</v-chip>
+            </template>
+          </v-list-item>
+
+          <v-list-subheader>Admin</v-list-subheader>
+          <v-list-item to="/agents" prepend-icon="mdi-server-network" title="Agents" />
+          <v-list-item
             v-if="authStore.user?.isAdministrator"
             to="/users"
-            variant="text"
-            size="small"
             prepend-icon="mdi-account-multiple"
-            >Users</v-btn
-          >
+            title="Users"
+          />
+        </v-list>
 
-          <v-chip
-            size="small"
-            :color="snapshotStore.connected ? 'success' : 'warning'"
-            variant="flat"
-            class="ml-3"
-          >
-            <v-icon
-              start
-              :icon="snapshotStore.connected ? 'mdi-lan-connect' : 'mdi-lan-disconnect'"
-            />
-            {{ snapshotStore.connected ? 'Live' : 'Reconnecting' }}
-          </v-chip>
-
-          <v-menu>
-            <template #activator="{ props }">
-              <v-btn icon="mdi-account-circle" variant="text" v-bind="props" class="ml-1" />
-            </template>
-            <v-list>
-              <v-list-item>
-                <v-list-item-title class="text-caption text-medium-emphasis">
-                  {{ authStore.user?.username }}
-                </v-list-item-title>
-              </v-list-item>
-              <v-divider />
-              <v-list-item
-                prepend-icon="mdi-form-textbox-password"
-                title="Change password"
-                @click="changePasswordOpen = true"
+        <template #append>
+          <v-divider />
+          <div class="pa-4 d-flex flex-column ga-3">
+            <div class="d-flex align-center ga-2 text-body-2">
+              <v-icon
+                size="small"
+                :color="snapshotStore.connected ? 'success' : 'warning'"
+                :icon="snapshotStore.connected ? 'mdi-lan-connect' : 'mdi-lan-disconnect'"
               />
-              <v-list-item prepend-icon="mdi-logout" title="Sign out" @click="logout" />
-            </v-list>
-          </v-menu>
+              {{ snapshotStore.connected ? 'Live' : 'Reconnecting' }}
+            </div>
+            <v-menu location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  variant="text"
+                  size="small"
+                  prepend-icon="mdi-account-circle"
+                  class="justify-start px-1"
+                  >{{ authStore.user?.username }}</v-btn
+                >
+              </template>
+              <v-list density="compact">
+                <v-list-item
+                  prepend-icon="mdi-form-textbox-password"
+                  title="Change password"
+                  @click="changePasswordOpen = true"
+                />
+                <v-list-item prepend-icon="mdi-logout" title="Sign out" @click="logout" />
+              </v-list>
+            </v-menu>
+            <div v-if="version" class="text-caption text-medium-emphasis">Track v{{ version }}</div>
+          </div>
         </template>
-      </v-app-bar>
+      </v-navigation-drawer>
 
       <ChangePasswordDialog v-model="changePasswordOpen" />
 
       <v-main>
-        <v-alert
-          v-for="node in snapshotStore.offlineNodes"
-          :key="node.name"
-          type="error"
-          variant="tonal"
-          density="compact"
-          class="ma-3 mb-0"
-        >
-          Node <strong>{{ node.name }}</strong> is unreachable: {{ node.error }}
-        </v-alert>
+        <div v-if="snapshotStore.offlineNodes.length > 0" class="track-page pb-0">
+          <v-alert
+            v-for="node in snapshotStore.offlineNodes"
+            :key="node.name"
+            type="error"
+            variant="tonal"
+            density="compact"
+            class="mb-2"
+          >
+            Node <strong>{{ node.name }}</strong> is unreachable: {{ node.error }}
+          </v-alert>
+        </div>
 
         <router-view />
       </v-main>
-
-      <v-footer
-        app
-        height="26"
-        color="surface"
-        class="text-caption text-medium-emphasis justify-end px-4"
-      >
-        <span v-if="version">Track v{{ version }}</span>
-      </v-footer>
     </template>
   </v-app>
 </template>
@@ -157,5 +162,12 @@ html,
 body,
 #app {
   margin: 0;
+}
+
+.track-page {
+  max-width: 1168px;
+  margin-inline: auto;
+  padding: 32px 24px 48px;
+  font-variant-numeric: tabular-nums;
 }
 </style>

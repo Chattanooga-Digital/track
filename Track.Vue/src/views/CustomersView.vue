@@ -138,7 +138,7 @@ async function saveBuckets() {
 </script>
 
 <template>
-  <v-container fluid>
+  <div class="track-page">
     <div class="d-flex align-center mb-4">
       <h1 class="text-h5">Customers</h1>
       <v-spacer />
@@ -277,5 +277,5 @@ async function saveBuckets() {
         </v-card-actions>
       </v-card>
     </v-dialog>
-  </v-container>
+  </div>
 </template>

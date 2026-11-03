@@ -48,7 +48,7 @@ watch([selectedStack, hours], loadHistory)
 </script>
 
 <template>
-  <v-container fluid>
+  <div class="track-page">
     <div class="d-flex align-center mb-4 ga-4 flex-wrap">
       <h1 class="text-h5">Stacks</h1>
       <v-spacer />
@@ -120,5 +120,5 @@ watch([selectedStack, hours], loadHistory)
         <v-progress-linear v-if="historyLoading" indeterminate class="mt-2" />
       </v-col>
     </v-row>
-  </v-container>
+  </div>
 </template>

@@ -6,7 +6,10 @@ improvements, bug fixes, and new features by version.
 ## Releases
 ### 0.7.1 - 2026-11-03
 #### Changes
- - The footer shows the commit the running build came from next to the version, such as v0.7.1+5e13aef
+ - The version now shows the commit the running build came from, such as v0.7.1+5e13aef
+ - Navigation moved to a side menu, and every page keeps a readable width instead of stretching across wide screens
+ - The dashboard lines each stack's CPU, memory, disk and cluster share up in columns, with its containers nested underneath, and lists the heaviest stacks first
+ - The billing table shows usage under each charge, and the period picker switches between live and recent months in one click
 
 ### 0.7.0 - 2026-07-18
 #### Features
