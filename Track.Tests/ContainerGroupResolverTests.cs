@@ -73,6 +73,10 @@ public class ContainerGroupResolverTests
         Assert.That(SensitiveEnvKeys.IsSensitive("DISCOURSE_SMTP_PASSWORD"), Is.True);
         Assert.That(SensitiveEnvKeys.IsSensitive("API_TOKEN"), Is.True);
         Assert.That(SensitiveEnvKeys.IsSensitive("AWS_SECRET_ACCESS_KEY"), Is.True);
+        Assert.That(SensitiveEnvKeys.IsSensitive("Track__Central__Key"), Is.True);
+        Assert.That(SensitiveEnvKeys.IsSensitive("SMTP_PASS"), Is.True);
+        Assert.That(SensitiveEnvKeys.IsSensitive("BASIC_AUTH_USERS"), Is.True);
+        Assert.That(SensitiveEnvKeys.IsSensitive("SENTRY_DSN"), Is.True);
         Assert.That(SensitiveEnvKeys.IsSensitive("DISCOURSE_HOSTNAME"), Is.False);
         Assert.That(SensitiveEnvKeys.IsSensitive("VIRTUAL_HOST"), Is.False);
     }

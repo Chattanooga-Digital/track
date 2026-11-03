@@ -221,15 +221,17 @@ variable's value** (its `DISCOURSE_HOSTNAME`, say), which becomes a synthetic st
 then flows through the normal stack → customer assignment unchanged.
 
 - `ContainerGroupResolver` (agent, `Services/Docker/`) derives the key: stack/compose label
-  first (no inspect); otherwise it inspects the container once (env is immutable, cached by
-  container ID) and returns the value of the first configured identity env var present.
+  first, then the `digital.chattanooga.track.stack` label (no inspect); otherwise it inspects the
+  container once (env is immutable, cached by container ID) and returns the value of the first
+  configured identity env var present. Track's image sets that label to `track`, so a standalone
+  agent never lands in Unidentified.
 - The ordered identity list lives centrally (`IdentityEnvVar` table, edited via
   `/api/v0/grouping/identity-env-vars` and the **Unidentified** UI view) and is handed back to
   agents in the ingest push **response** (`IngestResponse`) — the one central→agent channel.
 - **Security:** the agent surfaces only env var **key names** (in `StatsReport.Inventory`, held
   live in `ContainerInventoryHolder`), never values. Only the single chosen identity value ever
   reaches the central, as the stack name. Container secrets never leave the node. Secret-looking
-  keys (names matching `SensitiveEnvKeys.Markers` — `password`, `secret`, `token`, …) are dropped
+  keys (names matching `SensitiveEnvKeys.Markers` such as `pass`, `secret`, `token`, `key`) are dropped
   from the inventory, refused as an identity by the resolver, and rejected by `GroupingController`,
   so a secret's value can never be sent as a stack name.
 - A container with no matching identity var stays in the inventory (`GET /api/v0/inventory`)

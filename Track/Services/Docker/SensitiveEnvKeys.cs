@@ -10,8 +10,7 @@ public static class SensitiveEnvKeys
     /// <summary>Case-insensitive substrings that mark a key name as sensitive.</summary>
     public static readonly IReadOnlyList<string> Markers =
     [
-        "password", "passwd", "pwd", "secret", "token", "apikey", "api_key",
-        "credential", "private", "cert", "salt",
+        "pass", "pwd", "secret", "token", "key", "auth", "credential", "private", "cert", "salt", "dsn",
     ];
 
     public static bool IsSensitive(string name) =>

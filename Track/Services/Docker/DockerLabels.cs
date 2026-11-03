@@ -7,8 +7,11 @@ public static class DockerLabels
     public const string SwarmServiceName = "com.docker.swarm.service.name";
     public const string ComposeService = "com.docker.compose.service";
 
+    /// <summary>Names the stack of a container run outside Swarm and Compose; Track's own image sets it.</summary>
+    public const string TrackStack = "digital.chattanooga.track.stack";
+
     public static string? GetStackName(IDictionary<string, string>? labels) =>
-        GetLabel(labels, StackNamespace) ?? GetLabel(labels, ComposeProject);
+        GetLabel(labels, StackNamespace) ?? GetLabel(labels, ComposeProject) ?? GetLabel(labels, TrackStack);
 
     public static string? GetServiceName(IDictionary<string, string>? labels) =>
         GetLabel(labels, SwarmServiceName) ?? GetLabel(labels, ComposeService);

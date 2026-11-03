@@ -8,6 +8,9 @@ improvements, bug fixes, and new features by version.
 #### Changes
  - Deleting a user, customer or S3 source asks for confirmation in the app instead of a browser popup, and shows any error there
  - Shorter wording across the app, with Billed and Not billed tags on each group
+#### Bug Fixes
+ - A Track agent run outside Swarm no longer shows up as an unidentified container; it groups under the track stack
+ - Variables named like keys, passwords, auth settings or DSNs (such as the agent's own ingest key) can no longer be picked as a grouping identity
 
 ### 0.9.0 - 2026-11-03
 #### Features

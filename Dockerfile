@@ -38,6 +38,8 @@ RUN if echo "${APP_VERSION}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'; then \
     fi
 
 FROM base AS final
+# Groups Track's own containers as the "track" stack when run outside Swarm or Compose.
+LABEL digital.chattanooga.track.stack="track"
 WORKDIR /app
 COPY --from=publish /app/publish .
 COPY --from=vuebuild /src/Track.Website/wwwroot wwwroot

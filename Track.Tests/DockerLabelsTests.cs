@@ -28,6 +28,17 @@ public class DockerLabelsTests
     }
 
     [Test]
+    public void GetStackName_FallsBackToTrackStackLabel()
+    {
+        var labels = new Dictionary<string, string>
+        {
+            [DockerLabels.TrackStack] = "track",
+        };
+
+        Assert.That(DockerLabels.GetStackName(labels), Is.EqualTo("track"));
+    }
+
+    [Test]
     public void GetStackName_ReturnsNullWithoutStackLabels()
     {
         Assert.That(DockerLabels.GetStackName(new Dictionary<string, string>()), Is.Null);
