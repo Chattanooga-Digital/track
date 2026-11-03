@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import type { StackDto } from '@/types/customer'
+import { computed, ref, onMounted, watch } from 'vue'
+import type { AssignmentDto, CustomerDto, StackDto } from '@/types/customer'
 import type { HistoryBucketDto } from '@/types/stats'
-import { getStacks } from '@/api/stacksApi'
+import { getStacks, setStackAssignment } from '@/api/stacksApi'
+import { getCustomers } from '@/api/customersApi'
 import { getHistory } from '@/api/statsApi'
 import MetricHistoryChart from '@/components/MetricHistoryChart.vue'
+import AssignmentSelect from '@/components/AssignmentSelect.vue'
 
 const stacks = ref<StackDto[]>([])
+const customers = ref<CustomerDto[]>([])
 const loading = ref(true)
+const assigning = ref(false)
 
 const selectedStack = ref<string | null>(null)
 const hours = ref(24)
@@ -21,10 +25,25 @@ const hourOptions = [
   { title: 'Last 30 days', value: 720 },
 ]
 
+const selectedStackDto = computed(() =>
+  stacks.value.find((s) => s.stackName === selectedStack.value),
+)
+
+async function assign(assignment: AssignmentDto) {
+  if (!selectedStack.value) return
+  assigning.value = true
+  try {
+    await setStackAssignment(selectedStack.value, assignment)
+    stacks.value = await getStacks()
+  } finally {
+    assigning.value = false
+  }
+}
+
 async function refresh() {
   loading.value = true
   try {
-    stacks.value = await getStacks()
+    ;[stacks.value, customers.value] = await Promise.all([getStacks(), getCustomers()])
     if (!selectedStack.value && stacks.value[0]) {
       selectedStack.value = stacks.value[0].stackName
     }
@@ -102,6 +121,23 @@ watch([selectedStack, hours], loadHistory)
       </v-col>
 
       <v-col cols="12" md="8">
+        <v-card v-if="selectedStackDto" variant="outlined" class="mb-4">
+          <div class="d-flex flex-wrap align-center ga-4 pa-4">
+            <div class="flex-grow-1">
+              <div class="text-subtitle-1 font-weight-medium">{{ selectedStackDto.stackName }}</div>
+              <div class="text-body-2 text-medium-emphasis">
+                {{ selectedStackDto.containerCount }} running
+              </div>
+            </div>
+            <AssignmentSelect
+              :assignment="selectedStackDto"
+              :customers="customers"
+              :loading="assigning"
+              class="assignment-select"
+              @change="assign"
+            />
+          </div>
+        </v-card>
         <v-card v-if="selectedStack" variant="outlined" class="mb-4">
           <v-card-title class="text-subtitle-1">CPU</v-card-title>
           <v-card-text>
@@ -125,3 +161,9 @@ watch([selectedStack, hours], loadHistory)
     </v-row>
   </div>
 </template>
+
+<style scoped>
+.assignment-select {
+  flex: 0 1 260px;
+}
+</style>

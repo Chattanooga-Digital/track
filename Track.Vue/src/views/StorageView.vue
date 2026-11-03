@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import type { S3SourceDto, S3SourceEditDto, S3SourceKind } from '@/types/s3'
+import type { AssignmentDto, BucketDto, CustomerDto } from '@/types/customer'
+import { getBuckets, setBucketAssignment } from '@/api/bucketsApi'
+import { getCustomers } from '@/api/customersApi'
+import { formatBytes } from '@/utils/format'
+import AssignmentSelect from '@/components/AssignmentSelect.vue'
 import {
   getS3Sources,
   createS3Source,
@@ -39,12 +44,32 @@ function blankForm(): S3SourceEditDto {
   }
 }
 
+const buckets = ref<BucketDto[]>([])
+const customers = ref<CustomerDto[]>([])
+const assigningBucket = ref<string | null>(null)
+
+const bucketKey = (b: BucketDto) => `${b.sourceName}/${b.bucketName}`
+
 async function refresh() {
   loading.value = true
   try {
-    sources.value = await getS3Sources()
+    ;[sources.value, buckets.value, customers.value] = await Promise.all([
+      getS3Sources(),
+      getBuckets(),
+      getCustomers(),
+    ])
   } finally {
     loading.value = false
+  }
+}
+
+async function assignBucket(bucket: BucketDto, assignment: AssignmentDto) {
+  assigningBucket.value = bucketKey(bucket)
+  try {
+    await setBucketAssignment(bucket, assignment)
+    buckets.value = await getBuckets()
+  } finally {
+    assigningBucket.value = null
   }
 }
 
@@ -58,6 +83,7 @@ async function pollNow() {
   try {
     const result = await refreshS3Usage()
     pollResult.value = `Polled ${result.bucketCount} bucket(s) across enabled sources.`
+    buckets.value = await getBuckets()
   } finally {
     polling.value = false
   }
@@ -215,6 +241,47 @@ const canSave = () =>
       </v-table>
     </v-card>
 
+    <h2 class="text-h6 mt-8 mb-3">Buckets</h2>
+    <v-card variant="outlined">
+      <v-table>
+        <thead>
+          <tr>
+            <th>Bucket</th>
+            <th>Source</th>
+            <th class="text-right">Size</th>
+            <th class="text-right">Objects</th>
+            <th>Assigned to</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="bucket in buckets" :key="bucketKey(bucket)">
+            <td class="font-weight-medium">
+              {{ bucket.bucketName }}
+              <v-chip v-if="!bucket.isActive" size="x-small" variant="tonal" class="ml-2"
+                >Not seen in the last poll</v-chip
+              >
+            </td>
+            <td class="text-medium-emphasis">{{ bucket.sourceName }}</td>
+            <td class="text-right">{{ formatBytes(bucket.sizeBytes) }}</td>
+            <td class="text-right">{{ bucket.objectCount.toLocaleString() }}</td>
+            <td class="bucket-assignment py-2">
+              <AssignmentSelect
+                :assignment="bucket"
+                :customers="customers"
+                :loading="assigningBucket === bucketKey(bucket)"
+                @change="(assignment) => assignBucket(bucket, assignment)"
+              />
+            </td>
+          </tr>
+          <tr v-if="!loading && buckets.length === 0">
+            <td colspan="5" class="text-center text-medium-emphasis py-6">
+              No buckets found yet. Refresh usage after adding a source.
+            </td>
+          </tr>
+        </tbody>
+      </v-table>
+    </v-card>
+
     <v-dialog v-model="dialog" max-width="560">
       <v-card>
         <v-card-title>{{ editing ? 'Edit S3 Source' : 'New S3 Source' }}</v-card-title>
@@ -268,3 +335,9 @@ const canSave = () =>
     </v-dialog>
   </div>
 </template>
+
+<style scoped>
+.bucket-assignment {
+  min-width: 220px;
+}
+</style>

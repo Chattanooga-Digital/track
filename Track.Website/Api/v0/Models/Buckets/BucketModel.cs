@@ -9,6 +9,7 @@ public class BucketModel
     public long ObjectCount { get; set; }
     public int? CustomerId { get; set; }
     public string? CustomerName { get; set; }
+    public bool IsShared { get; set; }
 
     /// <summary>True when the bucket was seen in the most recent S3 poll (not only known from an assignment).</summary>
     public bool IsActive { get; set; }

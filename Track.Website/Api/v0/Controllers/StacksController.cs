@@ -73,6 +73,37 @@ public class StacksController(
         return Ok(stacks);
     }
 
+    /// <summary>Moves one stack to a customer, to shared infrastructure, or out of both.</summary>
+    [HttpPut("{stackName}/assignment")]
+    public async Task<IActionResult> SetAssignment(
+        [FromRoute] string stackName, [FromBody] StackAssignmentEditModel model, CancellationToken cancellationToken)
+    {
+        var name = stackName.Trim();
+        if (name.Length == 0)
+            return BadRequest("Stack name is required.");
+
+        if (model.CustomerId is int customerId
+            && !await TrackContext.Customers.AnyAsync(c => c.Id == customerId, cancellationToken))
+            return NotFound("Customer not found.");
+
+        var lowered = name.ToLower();
+        TrackContext.StackAssignments.RemoveRange(await TrackContext.StackAssignments
+            .Where(a => a.StackName.ToLower() == lowered)
+            .ToListAsync(cancellationToken));
+        TrackContext.SharedStacks.RemoveRange(await TrackContext.SharedStacks
+            .Where(s => s.StackName.ToLower() == lowered)
+            .ToListAsync(cancellationToken));
+
+        if (model.CustomerId is int id)
+            TrackContext.StackAssignments.Add(new StackAssignment { StackName = name, CustomerId = id });
+        else if (model.IsShared)
+            TrackContext.SharedStacks.Add(new SharedStack { StackName = name });
+
+        await TrackContext.SaveChangesAsync(cancellationToken);
+
+        return Ok();
+    }
+
     /// <summary>Replaces the shared infrastructure stacks; stacks assigned to a customer are moved here.</summary>
     [HttpPut("shared")]
     public async Task<IActionResult> SetShared([FromBody] List<string> stackNames, CancellationToken cancellationToken)

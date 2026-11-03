@@ -151,6 +151,9 @@ public class S3SourcesController(
             .Where(a => a.SourceName == source.Name)
             .ToListAsync(cancellationToken);
         TrackContext.BucketAssignments.RemoveRange(assignments);
+        TrackContext.SharedBuckets.RemoveRange(await TrackContext.SharedBuckets
+            .Where(b => b.SourceName == source.Name)
+            .ToListAsync(cancellationToken));
         TrackContext.S3Sources.Remove(source);
         await TrackContext.SaveChangesAsync(cancellationToken);
 

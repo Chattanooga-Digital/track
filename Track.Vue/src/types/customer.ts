@@ -16,14 +16,21 @@ export interface BucketDto {
   sourceName: string
   bucketName: string
   sizeBytes: number
+  objectCount: number
   customerId: number | null
   customerName: string | null
+  isShared: boolean
   isActive: boolean
 }
 
 export interface CustomerEditDto {
   name: string
   notes: string | null
+}
+
+export interface AssignmentDto {
+  customerId: number | null
+  isShared: boolean
 }
 
 export interface StackDto {

@@ -4,6 +4,11 @@ Welcome to the Track changelog. Here you'll find a history of product updates,
 improvements, bug fixes, and new features by version.
 
 ## Releases
+### 0.9.0 - 2026-11-03
+#### Features
+ - S3 buckets can be marked as shared infrastructure too, such as backups, so they are reported but not billed
+ - Change who a stack or bucket belongs to from the Stacks page or the new bucket list on the Storage page, not just from the customer
+
 ### 0.8.0 - 2026-11-03
 #### Features
  - Mark stacks such as the proxy and monitoring as shared infrastructure from the Customers page. They get their own group on the dashboard and billing, with their share reported but never billed, so Unassigned only holds stacks that still need a home

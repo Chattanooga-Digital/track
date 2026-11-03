@@ -34,6 +34,13 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
                 .ToListAsync(cancellationToken))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        var sharedBucketKeys = (await _metricsContext.SharedBuckets
+                .AsNoTracking()
+                .Select(b => new { b.SourceName, b.BucketName })
+                .ToListAsync(cancellationToken))
+            .Select(b => BucketKey(b.SourceName, b.BucketName))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var customerIdByBucket = customers
             .SelectMany(c => c.BucketAssignments.Select(a => (Key: BucketKey(a.SourceName, a.BucketName), c.Id)))
             .ToDictionary(x => x.Key, x => x.Id, StringComparer.OrdinalIgnoreCase);
@@ -131,9 +138,10 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
 
         foreach (var bucket in state.Buckets)
         {
-            var group = customerIdByBucket.TryGetValue(BucketKey(bucket.SourceName, bucket.BucketName), out var customerId)
+            var key = BucketKey(bucket.SourceName, bucket.BucketName);
+            var group = customerIdByBucket.TryGetValue(key, out var customerId)
                 ? groupsByCustomerId[customerId]
-                : unassigned;
+                : sharedBucketKeys.Contains(key) ? shared : unassigned;
             group.Buckets.Add(new BucketUsageModel
             {
                 SourceName = bucket.SourceName,
@@ -143,7 +151,7 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
             });
         }
 
-        if (shared.Stacks.Count > 0)
+        if (shared.Stacks.Count > 0 || shared.Buckets.Count > 0)
             snapshot.Customers.Add(shared);
         if (unassigned.Stacks.Count > 0 || unassigned.Buckets.Count > 0)
             snapshot.Customers.Add(unassigned);

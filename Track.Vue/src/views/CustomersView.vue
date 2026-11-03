@@ -11,7 +11,7 @@ import {
   setCustomerBuckets,
 } from '@/api/customersApi'
 import { getStacks, setSharedStacks } from '@/api/stacksApi'
-import { getBuckets } from '@/api/bucketsApi'
+import { getBuckets, setSharedBuckets } from '@/api/bucketsApi'
 
 const customers = ref<CustomerDto[]>([])
 const stacks = ref<StackDto[]>([])
@@ -32,9 +32,10 @@ const editing = ref<CustomerDto | null>(null)
 const form = ref({ name: '', notes: '' })
 
 const SHARED = 'shared'
+type AssignTarget = CustomerDto | typeof SHARED
 
 const stacksDialog = ref(false)
-const stacksTarget = ref<CustomerDto | typeof SHARED | null>(null)
+const stacksTarget = ref<AssignTarget | null>(null)
 const selectedStacks = ref<string[]>([])
 
 const sharedStackNames = computed(() =>
@@ -42,8 +43,10 @@ const sharedStackNames = computed(() =>
 )
 
 const bucketsDialog = ref(false)
-const bucketsTarget = ref<CustomerDto | null>(null)
+const bucketsTarget = ref<AssignTarget | null>(null)
 const selectedBuckets = ref<string[]>([])
+
+const sharedBuckets = computed(() => buckets.value.filter((b) => b.isShared))
 
 async function refresh() {
   loading.value = true
@@ -60,35 +63,34 @@ async function refresh() {
 
 onMounted(refresh)
 
-const stacksTargetName = computed(() =>
-  stacksTarget.value === SHARED ? 'shared infrastructure' : stacksTarget.value?.name,
-)
+function targetName(target: AssignTarget | null): string | undefined {
+  return target === SHARED ? 'shared infrastructure' : target?.name
+}
 
-// Stacks owned elsewhere are shown but flagged, since assigning moves them here.
-function currentOwner(stack: StackDto): string | null {
-  const target = stacksTarget.value
-  if (stack.isShared) return target === SHARED ? null : 'shared infrastructure'
-  if (stack.customerName === null) return null
-  return target !== SHARED && stack.customerId === target?.id ? null : stack.customerName
+// Items owned elsewhere are shown but flagged, since assigning moves them here.
+function otherOwner(
+  item: { customerId: number | null; customerName: string | null; isShared: boolean },
+  target: AssignTarget | null,
+): string | null {
+  if (item.isShared) return target === SHARED ? null : 'shared infrastructure'
+  if (item.customerName === null) return null
+  return target !== SHARED && item.customerId === target?.id ? null : item.customerName
+}
+
+function optionTitle(label: string, owner: string | null): string {
+  return owner ? `${label} (currently ${owner})` : label
 }
 
 const stackOptions = computed(() =>
-  stacks.value.map((s) => {
-    const owner = currentOwner(s)
-    return {
-      title: owner ? `${s.stackName} (currently ${owner})` : s.stackName,
-      value: s.stackName,
-    }
-  }),
+  stacks.value.map((s) => ({
+    title: optionTitle(s.stackName, otherOwner(s, stacksTarget.value)),
+    value: s.stackName,
+  })),
 )
 
-// Buckets owned by another customer are shown but flagged, since assigning moves them here.
 const bucketOptions = computed(() =>
   buckets.value.map((b) => ({
-    title:
-      b.customerName && b.customerId !== bucketsTarget.value?.id
-        ? `${b.sourceName}/${b.bucketName} (currently ${b.customerName})`
-        : `${b.sourceName}/${b.bucketName}`,
+    title: optionTitle(`${b.sourceName}/${b.bucketName}`, otherOwner(b, bucketsTarget.value)),
     value: bucketKey(b),
   })),
 )
@@ -157,9 +159,21 @@ function openBuckets(customer: CustomerDto) {
   bucketsDialog.value = true
 }
 
+function openSharedBuckets() {
+  bucketsTarget.value = SHARED
+  selectedBuckets.value = sharedBuckets.value.map(bucketKey)
+  bucketsDialog.value = true
+}
+
 async function saveBuckets() {
-  if (!bucketsTarget.value) return
-  await setCustomerBuckets(bucketsTarget.value.id, selectedBuckets.value.map(parseBucketKey))
+  const target = bucketsTarget.value
+  if (!target) return
+  const refs = selectedBuckets.value.map(parseBucketKey)
+  if (target === SHARED) {
+    await setSharedBuckets(refs)
+  } else {
+    await setCustomerBuckets(target.id, refs)
+  }
   bucketsDialog.value = false
   await refresh()
 }
@@ -180,8 +194,8 @@ async function saveBuckets() {
         <div class="flex-grow-1">
           <div class="text-subtitle-1 font-weight-medium">Shared infrastructure</div>
           <div class="text-body-2 text-medium-emphasis mb-2">
-            Stacks that serve the whole cluster, such as the proxy and monitoring. Reported on the
-            dashboard and billing, never billed.
+            Stacks and buckets that serve the whole cluster, such as the proxy, monitoring and
+            backups. Reported on the dashboard and billing, never billed.
           </div>
           <v-chip
             v-for="name in sharedStackNames"
@@ -192,15 +206,38 @@ async function saveBuckets() {
           >
             {{ name }}
           </v-chip>
-          <span v-if="sharedStackNames.length === 0" class="text-medium-emphasis">None</span>
+          <v-chip
+            v-for="b in sharedBuckets"
+            :key="bucketKey(b)"
+            size="x-small"
+            class="ma-1"
+            variant="tonal"
+            prepend-icon="mdi-database"
+          >
+            {{ b.bucketName }}
+          </v-chip>
+          <span
+            v-if="sharedStackNames.length === 0 && sharedBuckets.length === 0"
+            class="text-medium-emphasis"
+            >None</span
+          >
         </div>
-        <v-btn
-          size="small"
-          variant="text"
-          icon="mdi-layers-edit"
-          aria-label="Edit shared infrastructure stacks"
-          @click="openSharedStacks"
-        />
+        <div class="text-no-wrap">
+          <v-btn
+            size="small"
+            variant="text"
+            icon="mdi-layers-edit"
+            aria-label="Edit shared infrastructure stacks"
+            @click="openSharedStacks"
+          />
+          <v-btn
+            size="small"
+            variant="text"
+            icon="mdi-database-edit"
+            aria-label="Edit shared infrastructure buckets"
+            @click="openSharedBuckets"
+          />
+        </div>
       </div>
     </v-card>
 
@@ -291,7 +328,7 @@ async function saveBuckets() {
 
     <v-dialog v-model="stacksDialog" max-width="520">
       <v-card>
-        <v-card-title>Assign stacks to {{ stacksTargetName }}</v-card-title>
+        <v-card-title>Assign stacks to {{ targetName(stacksTarget) }}</v-card-title>
         <v-card-text>
           <v-select
             v-model="selectedStacks"
@@ -312,7 +349,7 @@ async function saveBuckets() {
 
     <v-dialog v-model="bucketsDialog" max-width="520">
       <v-card>
-        <v-card-title>Assign buckets to {{ bucketsTarget?.name }}</v-card-title>
+        <v-card-title>Assign buckets to {{ targetName(bucketsTarget) }}</v-card-title>
         <v-card-text>
           <v-select
             v-model="selectedBuckets"

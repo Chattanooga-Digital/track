@@ -145,7 +145,7 @@ public class CustomersController(
         return Ok();
     }
 
-    /// <summary>Replaces the customer's assigned buckets; buckets already assigned elsewhere are moved here.</summary>
+    /// <summary>Replaces the customer's assigned buckets; buckets assigned elsewhere or shared are moved here.</summary>
     [HttpPut("{id:int}/buckets")]
     public async Task<IActionResult> SetBuckets(
         [FromRoute] int id, [FromBody] List<BucketRefModel> buckets, CancellationToken cancellationToken)
@@ -188,6 +188,13 @@ public class CustomersController(
             && string.Equals(r.Bucket, a.BucketName, StringComparison.OrdinalIgnoreCase));
 
         TrackContext.BucketAssignments.RemoveRange(customer.BucketAssignments.Where(a => !Retained(a)));
+
+        var sharedCandidates = await TrackContext.SharedBuckets
+            .Where(b => sources.Contains(b.SourceName))
+            .ToListAsync(cancellationToken);
+        TrackContext.SharedBuckets.RemoveRange(sharedCandidates.Where(b => refs.Any(r =>
+            string.Equals(r.Source, b.SourceName, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(r.Bucket, b.BucketName, StringComparison.OrdinalIgnoreCase))));
 
         await TrackContext.SaveChangesAsync(cancellationToken);
 

@@ -459,6 +459,30 @@ namespace Track.Data.Migrations
                     b.ToTable("S3Sources");
                 });
 
+            modelBuilder.Entity("Track.Data.Models.SharedBucket", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BucketName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceName", "BucketName")
+                        .IsUnique();
+
+                    b.ToTable("SharedBuckets");
+                });
+
             modelBuilder.Entity("Track.Data.Models.SharedStack", b =>
                 {
                     b.Property<int>("Id")
