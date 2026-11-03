@@ -61,11 +61,12 @@ async function logout() {
       </v-app-bar>
 
       <v-navigation-drawer
-        v-model="drawerOpen"
+        :model-value="mdAndUp || drawerOpen"
         :permanent="mdAndUp"
         :temporary="!mdAndUp"
         width="240"
         color="surface"
+        @update:model-value="drawerOpen = $event"
       >
         <div class="d-flex align-center ga-2 px-5 pt-5 pb-2 text-subtitle-1 font-weight-bold">
           <img src="/logo.svg" alt="" height="24" />
