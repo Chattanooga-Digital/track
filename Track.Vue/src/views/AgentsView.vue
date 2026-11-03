@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useSnapshotStore } from '@/stores/snapshotStore'
 import { deleteAgent } from '@/api/agentsApi'
 import { formatBytes, formatCpu, memoryPercent } from '@/utils/format'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const snapshotStore = useSnapshotStore()
 const { nodes } = storeToRefs(snapshotStore)
@@ -122,40 +123,27 @@ function absoluteTime(iso: string | null): string {
                 size="x-small"
                 variant="text"
                 color="error"
-                title="Delete this dead agent"
+                aria-label="Delete agent"
                 @click="deleteTarget = node.name"
               />
             </td>
           </tr>
           <tr v-if="nodes.length === 0">
-            <td colspan="9" class="text-center text-medium-emphasis py-6">
-              No agents have reported yet. Deploy an agent (Track__Mode=Agent) pointing at this
-              instance.
-            </td>
+            <td colspan="9" class="text-center text-medium-emphasis py-6">No agents yet.</td>
           </tr>
         </tbody>
       </v-table>
     </v-card>
 
-    <v-dialog
+    <ConfirmDialog
       :model-value="!!deleteTarget"
-      max-width="440"
+      title="Delete agent"
+      :busy="deleting"
       @update:model-value="deleteTarget = null"
+      @confirm="confirmDelete"
     >
-      <v-card>
-        <v-card-title class="text-subtitle-1">Delete agent</v-card-title>
-        <v-card-text>
-          Remove <strong>{{ deleteTarget }}</strong> from the roster? This only clears the dead
-          entry. If the agent is still running it will reappear on its next report.
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" :disabled="deleting" @click="deleteTarget = null">Cancel</v-btn>
-          <v-btn color="error" variant="flat" :loading="deleting" @click="confirmDelete"
-            >Delete</v-btn
-          >
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+      Delete <strong>{{ deleteTarget }}</strong
+      >? It comes back if it reports again.
+    </ConfirmDialog>
   </div>
 </template>

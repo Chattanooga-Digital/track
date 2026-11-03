@@ -183,12 +183,7 @@ async function saveRates() {
 <template>
   <div class="track-page">
     <div class="d-flex flex-wrap align-end justify-space-between ga-4 mb-6">
-      <div>
-        <h1 class="text-h5 font-weight-medium">Billing</h1>
-        <div class="text-body-2 text-medium-emphasis">
-          {{ isLive ? 'Monthly run rate at current usage' : monthTitle(period) }}
-        </div>
-      </div>
+      <h1 class="text-h5 font-weight-medium">Billing</h1>
       <div class="d-flex flex-wrap align-center ga-2">
         <v-btn-toggle
           v-model="period"
@@ -226,11 +221,7 @@ async function saveRates() {
         <div class="text-caption text-medium-emphasis">Total billed</div>
         <div class="text-h5 font-weight-medium my-1">{{ money(totalBilled) }}</div>
         <div class="text-caption text-medium-emphasis">
-          {{
-            isLive
-              ? 'Per month at current usage'
-              : `Average of ${monthData?.sampleCount ?? 0} samples`
-          }}
+          {{ isLive ? 'Per month' : `${monthData?.sampleCount ?? 0} samples` }}
         </div>
       </v-card>
       <v-card variant="flat" border class="pa-4">
@@ -238,25 +229,27 @@ async function saveRates() {
           {{ isLive ? 'Cluster utilization' : 'Average utilization' }}
         </div>
         <div class="text-h5 font-weight-medium my-1">{{ pct(totalBlended) }}</div>
-        <div class="text-caption text-medium-emphasis">Blended CPU and memory</div>
+        <div class="text-caption text-medium-emphasis">CPU and memory</div>
       </v-card>
       <v-card variant="flat" border class="pa-4">
-        <div class="text-caption text-medium-emphasis">Shared infrastructure</div>
+        <div class="d-flex align-center justify-space-between ga-2">
+          <span class="text-caption text-medium-emphasis">Shared infrastructure</span>
+          <v-chip size="x-small" variant="tonal">Not billed</v-chip>
+        </div>
         <div class="text-h5 font-weight-medium my-1">
           {{ pct(shared?.blendedPercentOfCluster ?? 0) }}
         </div>
-        <div class="text-caption text-medium-emphasis">Not billed; spread across customers</div>
       </v-card>
       <v-card variant="flat" border class="pa-4">
-        <div class="text-caption text-medium-emphasis">Unassigned</div>
+        <div class="d-flex align-center justify-space-between ga-2">
+          <span class="text-caption text-medium-emphasis">Unassigned</span>
+          <v-chip size="x-small" variant="tonal" color="warning">Not billed</v-chip>
+        </div>
         <div
           class="text-h5 font-weight-medium my-1"
           :class="{ 'text-warning': (unassigned?.blendedPercentOfCluster ?? 0) > 0 }"
         >
           {{ pct(unassigned?.blendedPercentOfCluster ?? 0) }}
-        </div>
-        <div class="text-caption text-medium-emphasis">
-          Not billed; assign to a customer or shared infrastructure
         </div>
       </v-card>
       <v-card variant="flat" border class="pa-4">
@@ -344,13 +337,13 @@ async function saveRates() {
           </div>
 
           <div v-if="noMonthData" class="text-center text-medium-emphasis py-6">
-            No billing samples recorded for this month.
+            No data for this month.
           </div>
           <div
             v-else-if="rows.length === 0 && !loading"
             class="text-center text-medium-emphasis py-6"
           >
-            No customers yet. Assign stacks to customers to see billing shares.
+            No customers yet.
           </div>
 
           <div v-if="rows.length > 0" role="row" class="billing-grid total-row font-weight-medium">
@@ -370,16 +363,8 @@ async function saveRates() {
       </div>
     </v-card>
 
-    <p class="explanation text-body-2 text-medium-emphasis mt-4">
-      <template v-if="isLive">
-        The cluster's monthly cost is recovered in full from paying customers, split by their
-        blended CPU and memory share, so idle capacity, shared infrastructure and unassigned stacks
-        are spread across them. Disk and object storage bill per GB at the rates set under Rates.
-      </template>
-      <template v-else>
-        Averages of {{ monthData?.sampleCount ?? 0 }} samples across the month, priced at the
-        current rates. A customer present for part of the month bills proportionally.
-      </template>
+    <p class="text-body-2 text-medium-emphasis mt-4">
+      Cluster cost is split by CPU and memory share. Storage bills per GB.
     </p>
 
     <v-dialog v-model="rateDialog" max-width="480">
@@ -390,9 +375,7 @@ async function saveRates() {
             v-model.number="rateForm.clusterComputeMonthlyCost"
             type="number"
             min="0"
-            label="Cluster compute cost (per month)"
-            hint="What the whole cluster costs you monthly; recovered in full from customers."
-            persistent-hint
+            label="Cluster cost per month"
             variant="outlined"
             density="comfortable"
             class="mb-3"
@@ -401,8 +384,8 @@ async function saveRates() {
             v-model.number="rateForm.diskRatePerGbMonth"
             type="number"
             min="0"
-            label="Node disk rate (per GB / month)"
-            hint="Set to 0 to treat local disk as bundled into the compute cost."
+            label="Disk per GB per month"
+            hint="0 to include in cluster cost"
             persistent-hint
             variant="outlined"
             density="comfortable"
@@ -412,14 +395,14 @@ async function saveRates() {
             v-model.number="rateForm.objectStorageRatePerGbMonth"
             type="number"
             min="0"
-            label="Object storage rate (per GB / month)"
+            label="Object storage per GB per month"
             variant="outlined"
             density="comfortable"
             class="mb-3"
           />
           <v-text-field
             v-model="rateForm.currency"
-            label="Currency (ISO code)"
+            label="Currency"
             variant="outlined"
             density="comfortable"
           />
@@ -475,9 +458,5 @@ async function saveRates() {
 .total-row {
   min-height: 52px;
   background: rgba(var(--v-theme-on-surface), 0.03);
-}
-
-.explanation {
-  max-width: 68ch;
 }
 </style>

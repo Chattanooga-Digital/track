@@ -7,6 +7,7 @@ improvements, bug fixes, and new features by version.
 ### 0.9.1 - 2026-11-03
 #### Changes
  - Deleting a user, customer or S3 source asks for confirmation in the app instead of a browser popup, and shows any error there
+ - Shorter wording across the app, with Billed and Not billed tags on each group
 
 ### 0.9.0 - 2026-11-03
 #### Features

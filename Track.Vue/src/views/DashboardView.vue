@@ -113,7 +113,7 @@ function customerSummary(group: CustomerGroupDto): string {
           height="6"
           rounded
         />
-        <div class="text-caption text-medium-emphasis mt-1">Mean of CPU and memory share</div>
+        <div class="text-caption text-medium-emphasis mt-1">CPU and memory</div>
       </v-card>
       <v-card variant="flat" border class="pa-4">
         <div class="text-caption text-medium-emphasis">CPU used</div>
@@ -151,14 +151,14 @@ function customerSummary(group: CustomerGroupDto): string {
         <div class="text-caption text-medium-emphasis mt-1">
           {{ plural(cluster.nodeCount, 'node')
           }}<template v-if="total.objectStorageBytes > 0">
-            · plus {{ formatBytes(total.objectStorageBytes) }} object storage</template
+            · {{ formatBytes(total.objectStorageBytes) }} object storage</template
           >
         </div>
       </v-card>
     </div>
 
     <v-alert v-if="customers.length === 0" type="info" variant="tonal">
-      Waiting for the first poll to report container stats...
+      Waiting for the first report.
     </v-alert>
 
     <v-card v-for="group in customers" :key="customerKey(group)" variant="flat" border class="mb-5">
@@ -166,14 +166,11 @@ function customerSummary(group: CustomerGroupDto): string {
         <div class="d-flex flex-wrap align-center ga-3 customer-name">
           <h2 class="text-subtitle-1 font-weight-medium">{{ groupName(group) }}</h2>
           <span class="text-caption text-medium-emphasis">{{ customerSummary(group) }}</span>
-          <v-chip v-if="group.isShared" size="x-small" variant="tonal">Not billed</v-chip>
-          <v-chip
-            v-else-if="group.customerId === null"
-            size="x-small"
-            color="warning"
-            variant="tonal"
-            >Not billed · assign to a customer or shared infrastructure</v-chip
+          <v-chip v-if="group.customerId !== null" size="x-small" variant="tonal" color="primary"
+            >Billed</v-chip
           >
+          <v-chip v-else-if="group.isShared" size="x-small" variant="tonal">Not billed</v-chip>
+          <v-chip v-else size="x-small" variant="tonal" color="warning">Not billed</v-chip>
         </div>
         <dl class="d-flex flex-wrap ga-6">
           <div>

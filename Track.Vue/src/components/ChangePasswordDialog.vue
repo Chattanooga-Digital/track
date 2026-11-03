@@ -46,9 +46,7 @@ const canSave = () =>
       <v-card-title>Change Password</v-card-title>
       <v-card-text>
         <template v-if="done">
-          <v-alert type="success" variant="tonal" density="compact">
-            Your password has been changed.
-          </v-alert>
+          <v-alert type="success" variant="tonal" density="compact"> Password changed. </v-alert>
         </template>
         <template v-else>
           <v-text-field

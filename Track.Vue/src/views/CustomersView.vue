@@ -209,10 +209,9 @@ async function saveBuckets() {
     <v-card variant="outlined" class="mb-4">
       <div class="d-flex align-start ga-4 pa-4">
         <div class="flex-grow-1">
-          <div class="text-subtitle-1 font-weight-medium">Shared infrastructure</div>
-          <div class="text-body-2 text-medium-emphasis mb-2">
-            Stacks and buckets that serve the whole cluster, such as the proxy, monitoring and
-            backups. Reported on the dashboard and billing, never billed.
+          <div class="d-flex align-center ga-2 mb-2">
+            <span class="text-subtitle-1 font-weight-medium">Shared infrastructure</span>
+            <v-chip size="x-small" variant="tonal">Not billed</v-chip>
           </div>
           <v-chip
             v-for="name in sharedStackNames"
@@ -375,9 +374,7 @@ async function saveBuckets() {
             multiple
             chips
             closable-chips
-            :hint="
-              buckets.length === 0 ? 'No S3 sources configured or no buckets found yet.' : undefined
-            "
+            :hint="buckets.length === 0 ? 'No buckets found.' : undefined"
             persistent-hint
           />
         </v-card-text>

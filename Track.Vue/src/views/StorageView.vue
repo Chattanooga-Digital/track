@@ -84,7 +84,7 @@ async function pollNow() {
   pollResult.value = null
   try {
     const result = await refreshS3Usage()
-    pollResult.value = `Polled ${result.bucketCount} bucket(s) across enabled sources.`
+    pollResult.value = `Found ${result.bucketCount} buckets.`
     buckets.value = await getBuckets()
   } finally {
     polling.value = false
@@ -124,7 +124,7 @@ async function runTest() {
   try {
     const result = await testS3Source(payload(), editing.value?.id)
     testResult.value = result.ok
-      ? { ok: true, message: `Connected. ${result.bucketCount} bucket(s) found.` }
+      ? { ok: true, message: `Connected. ${result.bucketCount} buckets.` }
       : { ok: false, message: result.error ?? 'Connection failed.' }
   } finally {
     testing.value = false
@@ -182,7 +182,7 @@ const canSave = () =>
 <template>
   <div class="track-page">
     <div class="d-flex align-center mb-4">
-      <h1 class="text-h5">Object Storage Sources</h1>
+      <h1 class="text-h5">Storage</h1>
       <v-spacer />
       <v-btn
         variant="text"
@@ -250,9 +250,7 @@ const canSave = () =>
             </td>
           </tr>
           <tr v-if="!loading && sources.length === 0">
-            <td colspan="6" class="text-center text-medium-emphasis py-6">
-              No S3 sources yet. Add one to track object storage.
-            </td>
+            <td colspan="6" class="text-center text-medium-emphasis py-6">No sources yet.</td>
           </tr>
         </tbody>
       </v-table>
@@ -275,7 +273,7 @@ const canSave = () =>
             <td class="font-weight-medium">
               {{ bucket.bucketName }}
               <v-chip v-if="!bucket.isActive" size="x-small" variant="tonal" class="ml-2"
-                >Not seen in the last poll</v-chip
+                >Not seen</v-chip
               >
             </td>
             <td class="text-medium-emphasis">{{ bucket.sourceName }}</td>
@@ -291,9 +289,7 @@ const canSave = () =>
             </td>
           </tr>
           <tr v-if="!loading && buckets.length === 0">
-            <td colspan="5" class="text-center text-medium-emphasis py-6">
-              No buckets found yet. Refresh usage after adding a source.
-            </td>
+            <td colspan="5" class="text-center text-medium-emphasis py-6">No buckets yet.</td>
           </tr>
         </tbody>
       </v-table>
@@ -307,7 +303,7 @@ const canSave = () =>
             v-model="form.name"
             label="Name"
             :disabled="editing !== null"
-            hint="Stable identifier used in bucket assignments; not editable after creation."
+            hint="Can't be changed later"
             persistent-hint
             class="mb-2"
           />
@@ -323,7 +319,7 @@ const canSave = () =>
             v-model="form.secretKey"
             label="Secret key"
             type="password"
-            :placeholder="editing ? 'Leave blank to keep current' : undefined"
+            :placeholder="editing ? 'Unchanged' : undefined"
             autocomplete="new-password"
             class="mb-2"
           />
@@ -359,7 +355,7 @@ const canSave = () =>
       @confirm="confirmDelete"
     >
       Delete <strong>{{ deleteTarget?.name }}</strong
-      >? Its buckets stop being tracked and lose their assignments.
+      >? Its buckets lose their assignments.
     </ConfirmDialog>
   </div>
 </template>

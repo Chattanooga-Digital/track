@@ -68,12 +68,8 @@ onMounted(refresh)
     </div>
 
     <v-alert type="info" variant="tonal" density="compact" class="mb-4">
-      Standalone containers with no Swarm or Compose stack label are grouped by the value of the
-      first matching environment variable below. Pick an identity variable (e.g.
-      <code>DISCOURSE_HOSTNAME</code>) and its value becomes a stack you can assign to a customer.
-      Only the chosen variable's value is sent to Track; other env values never leave the node.
-      Secret-looking variables (names containing <code>password</code>, <code>secret</code>,
-      <code>token</code>, and similar) are hidden and cannot be used as an identity.
+      Containers without a stack label are grouped by the first of these variables they have. Only
+      that value leaves the node. Secret-looking variables are hidden.
     </v-alert>
 
     <v-card variant="outlined" class="mb-4">
@@ -91,13 +87,11 @@ onMounted(refresh)
             <span class="text-caption text-medium-emphasis mr-1">{{ i + 1 }}.</span>{{ name }}
           </v-chip>
         </div>
-        <div v-else class="text-medium-emphasis mb-3">
-          No identity variables yet. Add one below, or click an env var chip on a container.
-        </div>
+        <div v-else class="text-medium-emphasis mb-3">None yet.</div>
 
         <v-text-field
           v-model="newVar"
-          label="Add an environment variable name"
+          label="Variable name"
           placeholder="DISCOURSE_HOSTNAME"
           density="compact"
           hide-details
@@ -123,7 +117,7 @@ onMounted(refresh)
       <v-progress-linear v-if="loading" indeterminate />
 
       <v-card-text v-if="!loading && inventory.length === 0" class="text-medium-emphasis">
-        No unidentified containers. Everything is grouped by a stack label or an identity variable.
+        No unidentified containers.
       </v-card-text>
 
       <v-table v-else density="compact">

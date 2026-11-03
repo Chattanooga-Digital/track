@@ -288,9 +288,7 @@ const canSavePassword = () =>
               confirmPassword && confirmPassword !== newPassword ? 'Passwords do not match.' : []
             "
           />
-          <div class="text-caption text-medium-emphasis mt-1">
-            Setting a password signs the user out of all sessions.
-          </div>
+          <div class="text-caption text-medium-emphasis mt-1">Signs the user out everywhere.</div>
 
           <v-alert v-if="passwordError" type="error" variant="tonal" density="compact" class="mt-3">
             {{ passwordError }}

@@ -380,9 +380,19 @@ cd Track.Vue && npm run format # frontend
 
 The app version lives in `Track.Website/Track.Website.csproj` as `<VersionPrefix>`.
 The changelog is `docs/product-updates/changelog.md`. When completing a piece of work,
-add a one-line entry under the current version (bump `VersionPrefix` for a new release),
-newest version at the top, dated today, categorized `#### Features`, `#### Changes`, or
-`#### Bug Fixes`. Keep entries short and user-facing; no em dashes.
+add a one-line entry under the current version, newest version at the top, dated today,
+categorized `#### Features`, `#### Changes`, or `#### Bug Fixes`. Keep entries short and
+user-facing; no em dashes.
+
+Version bumps are rare. Only a significant app improvement gets a minor bump; small features,
+tweaks and fixes go under the current version with no bump. Every push to `master` deploys
+anyway (the build number is the fourth version part), so a bump is not needed to ship.
+
+## UI Copy
+
+Write like a normal app: short labels, short empty states ("No customers yet."), tags such as
+Billed / Not billed instead of sentences. No explanatory paragraphs or hints that restate the
+label. No browser dialogs (`confirm`/`alert`/`prompt`); use `ConfirmDialog` or a `v-dialog`.
 
 ## Git Workflow
 
