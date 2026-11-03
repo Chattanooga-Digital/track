@@ -83,11 +83,17 @@ const canSave = () =>
       <v-card-actions>
         <v-spacer />
         <template v-if="done">
-          <v-btn color="primary" @click="open = false">Close</v-btn>
+          <v-btn color="primary" variant="flat" @click="open = false">Close</v-btn>
         </template>
         <template v-else>
           <v-btn variant="text" @click="open = false">Cancel</v-btn>
-          <v-btn color="primary" :loading="saving" :disabled="!canSave()" @click="save">
+          <v-btn
+            color="primary"
+            variant="flat"
+            :loading="saving"
+            :disabled="!canSave()"
+            @click="save"
+          >
             Change Password
           </v-btn>
         </template>
