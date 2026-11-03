@@ -71,7 +71,7 @@ jobs:
   # Releasing here rather than from TeamCity: Polecat never checks the registry, so the release must follow the push.
   deploy:
     needs: docker
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read
