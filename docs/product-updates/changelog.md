@@ -5,6 +5,9 @@ improvements, bug fixes, and new features by version.
 
 ## Releases
 ### 0.9.1 - 2026-11-03
+#### Features
+ - Agents run outside the swarm update themselves to the central's version
+
 #### Changes
  - Deleting a user, customer or S3 source asks for confirmation in the app instead of a browser popup, and shows any error there
  - Shorter wording across the app, with Billed and Not billed tags on each group

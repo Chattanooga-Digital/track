@@ -53,7 +53,7 @@ public class IngestController(
         await BroadcastAsync(cancellationToken);
 
         // Hand the agent the authoritative identity env-var list so grouping is driven from the central UI.
-        return Ok(new IngestResponse([.. IdentityEnvVarStore.Current]));
+        return Ok(new IngestResponse([.. IdentityEnvVarStore.Current], AppVersion.Build));
     }
 
     [HttpPost("disk")]

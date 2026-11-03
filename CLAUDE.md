@@ -268,6 +268,15 @@ node. An agent that stops pushing is marked offline by the central after
 `Track:NodeOfflineAfterSeconds`, and its stale samples are dropped rather than shown as
 current.
 
+A host outside the swarm runs the agent as a plain `docker run` container with
+`Track__Central__Url` set to the central's public URL. Such an agent updates itself:
+the ingest response carries the central's build version (`IngestResponse.Version`,
+e.g. `0.9.1.23`, which is also the image tag), and when it differs `AgentSelfUpdater`
+pulls that tag of its own image repository, starts a copy of its container under the
+original name, waits for it to stay up, then removes itself (renaming back if the copy
+fails). Agents labelled by Swarm or Compose skip this, as do dev builds without a
+four-part version. `Track__AgentAutoUpdate=false` turns it off.
+
 ## C# Coding Conventions
 
 Follows the standard house style (see `.editorconfig`):

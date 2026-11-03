@@ -16,7 +16,8 @@ public sealed class StatsPushHostedService(
     DockerStatsCollector statsCollector,
     AgentNodeNameResolver nodeNameResolver,
     IdentityEnvVarProvider identityEnvVars,
-    CentralClient centralClient) : BackgroundService
+    CentralClient centralClient,
+    AgentSelfUpdater selfUpdater) : BackgroundService
 {
     private readonly ILogger<StatsPushHostedService> _logger = logger;
     private readonly IOptions<TrackOptions> _options = options;
@@ -24,6 +25,7 @@ public sealed class StatsPushHostedService(
     private readonly AgentNodeNameResolver _nodeNameResolver = nodeNameResolver;
     private readonly IdentityEnvVarProvider _identityEnvVars = identityEnvVars;
     private readonly CentralClient _centralClient = centralClient;
+    private readonly AgentSelfUpdater _selfUpdater = selfUpdater;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -63,8 +65,11 @@ public sealed class StatsPushHostedService(
 
         var response = await _centralClient.PostStatsAsync(report, cancellationToken);
 
+        if (response is null)
+            return;
+
         // Apply the central's authoritative identity env-var list so grouping is driven from the UI.
-        if (response is not null)
-            _identityEnvVars.Update(response.IdentityEnvVars);
+        _identityEnvVars.Update(response.IdentityEnvVars);
+        await _selfUpdater.UpdateIfBehindAsync(response.Version, cancellationToken);
     }
 }

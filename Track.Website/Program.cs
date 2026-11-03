@@ -22,6 +22,7 @@ if (trackOptions.Mode == TrackMode.Agent)
     builder.Services.Configure<TrackOptions>(builder.Configuration.GetSection(TrackOptions.Section));
     builder.Services.AddDockerCollectors();
     builder.Services.AddSingleton<AgentNodeNameResolver>();
+    builder.Services.AddSingleton<AgentSelfUpdater>();
     builder.Services.AddHttpClient<CentralClient>(CentralClient.Configure);
     builder.Services
         .AddHostedService<StatsPushHostedService>()

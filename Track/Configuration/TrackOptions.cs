@@ -80,6 +80,12 @@ public class TrackOptions
     /// <summary>Agent -> central connection (Agent mode only).</summary>
     public CentralConnectionOptions Central { get; set; } = new();
 
+    /// <summary>
+    /// A standalone agent (not run by Swarm or Compose) replaces its own container with the central's version
+    /// when they differ (Agent mode only).
+    /// </summary>
+    public bool AgentAutoUpdate { get; set; } = true;
+
     /// <summary>Central-side ingest secret (Central mode only).</summary>
     public IngestOptions Ingest { get; set; } = new();
 

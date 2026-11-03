@@ -26,6 +26,6 @@ public record LabelLessContainer(string ContainerId, string ContainerName, strin
 
 /// <summary>
 /// The central's response to a stats push: the authoritative ordered list of env var names to use as
-/// grouping identities. The agent applies this so identity config is driven from the central UI.
+/// grouping identities, and the central's build version, which standalone agents update themselves to.
 /// </summary>
-public record IngestResponse(List<string> IdentityEnvVars);
+public record IngestResponse(List<string> IdentityEnvVars, string? Version = null);
