@@ -275,7 +275,10 @@ e.g. `0.9.1.23`, which is also the image tag), and when it differs `AgentSelfUpd
 pulls that tag of its own image repository, starts a copy of its container under the
 original name, waits for it to stay up, then removes itself (renaming back if the copy
 fails). Agents labelled by Swarm or Compose skip this, as do dev builds without a
-four-part version. `Track__AgentAutoUpdate=false` turns it off.
+four-part version. `Track__AgentAutoUpdate=false` turns it off. It does not work with
+`--network host`: the agent still listens on 5020, so the copy can't bind while the
+original runs, and the update rolls back. Every push reports the agent's version
+(`StatsReport.AgentVersion`), shown on the Agents page against `SnapshotModel.CentralVersion`.
 
 ## C# Coding Conventions
 

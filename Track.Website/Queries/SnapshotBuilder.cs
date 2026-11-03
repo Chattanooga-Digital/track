@@ -104,6 +104,7 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
                         Online = n.Online,
                         Error = n.Error,
                         LastSeen = n.LastSeen,
+                        AgentVersion = n.AgentVersion,
                         ContainersTracked = nodeSamples.Count,
                         UnidentifiedContainers = nodeSamples.Count(s => s.StackName is null),
                         CpuCores = capacity?.CpuCores ?? 0,

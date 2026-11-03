@@ -7,10 +7,12 @@ improvements, bug fixes, and new features by version.
 ### 0.9.1 - 2026-11-03
 #### Features
  - Agents run outside the swarm update themselves to the central's version
+ - The Agents page shows each agent's version and flags any that don't match the central
 
 #### Changes
  - Deleting a user, customer or S3 source asks for confirmation in the app instead of a browser popup, and shows any error there
  - Shorter wording across the app, with Billed and Not billed tags on each group
+ - The version includes the build number, such as v0.9.1.24+f155434
 #### Bug Fixes
  - A Track agent run outside Swarm no longer shows up as an unidentified container; it groups under the track stack
  - Variables named like keys, passwords, auth settings or DSNs (such as the agent's own ingest key) can no longer be picked as a grouping identity

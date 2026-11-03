@@ -44,7 +44,8 @@ public class IngestController(
             return Unauthorized();
 
         CurrentStateHolder.SetNodeSamples(
-            report.NodeName, new NodeCollection(report.Capacity, report.Samples, report.Inventory), report.Timestamp);
+            report.NodeName, new NodeCollection(report.Capacity, report.Samples, report.Inventory), report.Timestamp,
+            report.AgentVersion);
         InventoryHolder.SetNodeInventory(report.NodeName, report.Inventory);
 
         TrackContext.ContainerSamples.AddRange(report.Samples);

@@ -7,7 +7,8 @@ import { formatBytes, formatCpu, memoryPercent } from '@/utils/format'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const snapshotStore = useSnapshotStore()
-const { nodes } = storeToRefs(snapshotStore)
+const { nodes, snapshot } = storeToRefs(snapshotStore)
+const centralVersion = computed(() => snapshot.value?.centralVersion)
 
 const deleteTarget = ref<string | null>(null)
 const deleting = ref(false)
@@ -70,6 +71,7 @@ function absoluteTime(iso: string | null): string {
             <th>Agent</th>
             <th>Status</th>
             <th>Last seen</th>
+            <th>Version</th>
             <th class="text-right">Containers</th>
             <th class="text-right">Unidentified</th>
             <th class="text-right">CPU cores</th>
@@ -95,6 +97,17 @@ function absoluteTime(iso: string | null): string {
             </td>
             <td>
               <span :title="absoluteTime(node.lastSeen)">{{ relativeTime(node.lastSeen) }}</span>
+            </td>
+            <td class="text-no-wrap">
+              {{ node.agentVersion ?? 'Unknown' }}
+              <v-chip
+                v-if="node.agentVersion !== centralVersion"
+                size="x-small"
+                color="warning"
+                variant="tonal"
+                class="ml-1"
+                >{{ node.agentVersion ? 'Updating' : 'Old agent' }}</v-chip
+              >
             </td>
             <td class="text-right">{{ node.containersTracked }}</td>
             <td class="text-right">
@@ -129,7 +142,7 @@ function absoluteTime(iso: string | null): string {
             </td>
           </tr>
           <tr v-if="nodes.length === 0">
-            <td colspan="9" class="text-center text-medium-emphasis py-6">No agents yet.</td>
+            <td colspan="10" class="text-center text-medium-emphasis py-6">No agents yet.</td>
           </tr>
         </tbody>
       </v-table>

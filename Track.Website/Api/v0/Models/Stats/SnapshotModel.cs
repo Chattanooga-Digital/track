@@ -3,6 +3,10 @@ namespace Track.Website.Api.v0.Models.Stats;
 public class SnapshotModel
 {
     public DateTime Timestamp { get; set; }
+
+    /// <summary>The central's build version, which agents are expected to match.</summary>
+    public string CentralVersion { get; set; } = AppVersion.Build;
+
     public ClusterCapacityModel Cluster { get; set; } = new();
     public UsageTotalsModel Totals { get; set; } = new();
     public List<NodeStatusModel> Nodes { get; set; } = [];

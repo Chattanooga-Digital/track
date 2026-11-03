@@ -59,6 +59,7 @@ export interface NodeStatusDto {
   online: boolean
   error: string | null
   lastSeen: string | null
+  agentVersion: string | null
   containersTracked: number
   unidentifiedContainers: number
   cpuCores: number
@@ -69,6 +70,7 @@ export interface NodeStatusDto {
 
 export interface SnapshotDto {
   timestamp: string
+  centralVersion: string
   cluster: ClusterCapacityDto
   totals: UsageTotalsDto
   nodes: NodeStatusDto[]

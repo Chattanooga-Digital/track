@@ -61,7 +61,7 @@ public sealed class StatsPushHostedService(
 
         var collection = await _statsCollector.CollectAsync(node, timestamp, cancellationToken);
         var report = new StatsReport(
-            node.Name, timestamp, collection.Capacity, collection.Samples, collection.Inventory);
+            node.Name, timestamp, collection.Capacity, collection.Samples, collection.Inventory, AppVersion.Build);
 
         var response = await _centralClient.PostStatsAsync(report, cancellationToken);
 

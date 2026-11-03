@@ -4,7 +4,7 @@ using Track.Services.Ingest;
 
 namespace Track.Services;
 
-public record NodeStatus(string Name, bool Online, string? Error, DateTime? LastSeen);
+public record NodeStatus(string Name, bool Online, string? Error, DateTime? LastSeen, string? AgentVersion = null);
 
 /// <summary>Total schedulable capacity of one Docker node.</summary>
 public record NodeCapacity(string NodeName, long CpuCores, long MemoryBytes);
@@ -41,13 +41,13 @@ public sealed class CurrentStateHolder
     private readonly Dictionary<string, Dictionary<string, long>> _stackVolumeBytesByNode = [];
     private readonly Dictionary<string, List<BucketUsage>> _bucketsBySource = [];
 
-    public void SetNodeSamples(string nodeName, NodeCollection collection, DateTime timestamp)
+    public void SetNodeSamples(string nodeName, NodeCollection collection, DateTime timestamp, string? agentVersion = null)
     {
         lock (_lock)
         {
             _samplesByNode[nodeName] = collection.Samples;
             _capacityByNode[nodeName] = collection.Capacity;
-            _nodes[nodeName] = new NodeStatus(nodeName, true, null, timestamp);
+            _nodes[nodeName] = new NodeStatus(nodeName, true, null, timestamp, agentVersion);
         }
     }
 
@@ -58,8 +58,8 @@ public sealed class CurrentStateHolder
             // Drop stale samples and capacity so an unreachable node's containers don't show as current.
             _samplesByNode.Remove(nodeName);
             _capacityByNode.Remove(nodeName);
-            var lastSeen = _nodes.TryGetValue(nodeName, out var previous) ? previous.LastSeen : null;
-            _nodes[nodeName] = new NodeStatus(nodeName, false, error, lastSeen);
+            var previous = _nodes.GetValueOrDefault(nodeName);
+            _nodes[nodeName] = new NodeStatus(nodeName, false, error, previous?.LastSeen, previous?.AgentVersion);
         }
     }
 

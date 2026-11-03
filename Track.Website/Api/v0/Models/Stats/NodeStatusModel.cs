@@ -7,6 +7,9 @@ public class NodeStatusModel
     public string? Error { get; set; }
     public DateTime? LastSeen { get; set; }
 
+    /// <summary>The agent's build version, e.g. 0.9.1.24; null for agents too old to report it.</summary>
+    public string? AgentVersion { get; set; }
+
     /// <summary>Running containers this agent currently reports.</summary>
     public int ContainersTracked { get; set; }
 

@@ -3,16 +3,17 @@ using Track.Data.Models;
 namespace Track.Services.Ingest;
 
 /// <summary>
-/// One agent's stats push: its node capacity, a sample per running container, and an inventory of the
-/// label-less standalone containers on the node. Reuses the storage entities as the wire format;
-/// <see cref="ContainerSample.Id"/> is 0 until the central instance persists it.
+/// One agent's stats push: its node capacity, a sample per running container, an inventory of the
+/// label-less standalone containers on the node, and the agent's build version. Reuses the storage
+/// entities as the wire format; <see cref="ContainerSample.Id"/> is 0 until the central instance persists it.
 /// </summary>
 public record StatsReport(
     string NodeName,
     DateTime Timestamp,
     NodeCapacity Capacity,
     List<ContainerSample> Samples,
-    List<LabelLessContainer> Inventory);
+    List<LabelLessContainer> Inventory,
+    string? AgentVersion = null);
 
 /// <summary>One agent's disk-usage push: per-container writable-layer sizes and per-volume sizes.</summary>
 public record DiskReport(string NodeName, DateTime Timestamp, List<DiskSample> Samples);
