@@ -64,6 +64,10 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<CurrentStateHolder>();
         services.AddSingleton<ContainerInventoryHolder>();
+        services.AddSingleton<VolumeInventoryHolder>();
+        services.AddSingleton<SwarmInventoryHolder>();
+        services.AddSingleton<Track.Services.Backups.BackupMasterKey>();
+        services.AddScoped<Track.Services.Backups.BackupSecretProtector>();
         services.AddSingleton<IdentityEnvVarStore>();
         services.AddSingleton<Track.Services.S3.MinioAdminClient>();
         services.AddSingleton<Track.Services.S3.S3UsageCollector>();

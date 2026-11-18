@@ -1,6 +1,7 @@
 using Track.Data.Models;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Track.Data;
 
@@ -19,6 +20,26 @@ public class TrackContext(DbContextOptions<TrackContext> options)
     public DbSet<IdentityEnvVar> IdentityEnvVars => Set<IdentityEnvVar>();
     public DbSet<S3Source> S3Sources => Set<S3Source>();
     public DbSet<BillingRate> BillingRates => Set<BillingRate>();
+    public DbSet<AgentEnrollment> AgentEnrollments => Set<AgentEnrollment>();
+    public DbSet<BackupTarget> BackupTargets => Set<BackupTarget>();
+    public DbSet<BackupSettings> BackupSettings => Set<BackupSettings>();
+    public DbSet<BackupRepository> BackupRepositories => Set<BackupRepository>();
+    public DbSet<BackupVolumeOverride> BackupVolumeOverrides => Set<BackupVolumeOverride>();
+    public DbSet<BackupJob> BackupJobs => Set<BackupJob>();
+    public DbSet<BackupSnapshot> BackupSnapshots => Set<BackupSnapshot>();
+
+    // SQLite keeps no time zone, so values come back Unspecified and serialize without a Z; every stored time is UTC.
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<NullableUtcDateTimeConverter>();
+    }
+
+    private sealed class UtcDateTimeConverter()
+        : ValueConverter<DateTime, DateTime>(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+    private sealed class NullableUtcDateTimeConverter()
+        : ValueConverter<DateTime?, DateTime?>(v => v, v => v == null ? v : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc));
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

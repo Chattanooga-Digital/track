@@ -42,6 +42,7 @@ public class BillingSampleRecorder(TrackContext trackContext, SnapshotBuilder sn
                 MemoryUsedBytes = customer.Totals.MemoryUsedBytes,
                 DiskBytes = customer.Totals.DiskBytes,
                 ObjectStorageBytes = customer.Totals.ObjectStorageBytes,
+                BackupStorageBytes = customer.Totals.BackupStorageBytes,
                 CpuPercentOfCluster = customer.Totals.CpuPercentOfCluster,
                 MemoryPercentOfCluster = customer.Totals.MemoryPercentOfCluster,
                 BlendedPercentOfCluster = customer.Totals.BlendedPercentOfCluster,

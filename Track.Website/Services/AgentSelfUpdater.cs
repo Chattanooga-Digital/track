@@ -126,7 +126,7 @@ public sealed partial class AgentSelfUpdater(
         await client.Containers.RemoveContainerAsync(self.ID, new ContainerRemoveParameters { Force = true }, CancellationToken.None);
     }
 
-    private static async Task<ContainerInspectResponse?> FindSelfAsync(DockerClient client, CancellationToken cancellationToken)
+    internal static async Task<ContainerInspectResponse?> FindSelfAsync(DockerClient client, CancellationToken cancellationToken)
     {
         var id = File.Exists("/proc/self/mountinfo")
             ? ParseContainerId(await File.ReadAllTextAsync("/proc/self/mountinfo", cancellationToken))

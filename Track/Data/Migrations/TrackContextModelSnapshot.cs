@@ -116,10 +116,418 @@ namespace Track.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Track.Data.Models.AgentEnrollment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FirstSeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NodeName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PendingTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NodeName")
+                        .IsUnique();
+
+                    b.ToTable("AgentEnrollments");
+                });
+
+            modelBuilder.Entity("Track.Data.Models.BackupJob", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("BytesAdded")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("BytesDone")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("BytesTotal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("CancelRequested")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("DispatchedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("FilesChanged")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("FilesNew")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastProgressAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NodeName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OutputTail")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParametersJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ParentJobId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double?>("PercentDone")
+                        .HasColumnType("REAL");
+
+                    b.Property<DateTime>("QueuedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepositoryKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SnapshotId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StackName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Step")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Trigger")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("VolumeKey")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VolumeName")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParentJobId");
+
+                    b.HasIndex("QueuedAt");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("VolumeKey", "QueuedAt");
+
+                    b.ToTable("BackupJobs");
+                });
+
+            modelBuilder.Entity("Track.Data.Models.BackupRepository", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("CustomerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CustomerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("InitializedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsShared")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastCheckedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastMaintenanceError")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastPrunedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("SizeBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("SizeUpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("BackupRepositories");
+                });
+
+            modelBuilder.Entity("Track.Data.Models.BackupSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("BackupMinuteUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CheckPercent")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("HeartbeatUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("HookTimeoutMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("KeepDaily")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("KeepMonthly")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("KeepWeekly")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MaxJobsPerNode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MaxJobsTotal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Paused")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PruneDay")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PruneMinuteUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SpreadMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("StaleAfterHours")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BackupSettings");
+                });
+
+            modelBuilder.Entity("Track.Data.Models.BackupSnapshot", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("BytesAdded")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Images")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("JobId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("NodeName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Paths")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("PreRestore")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RepositoryKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SnapshotId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StackName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("Time")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("TotalBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("VolumeKey")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VolumeName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepositoryKey", "SnapshotId")
+                        .IsUnique();
+
+                    b.HasIndex("VolumeKey", "Time");
+
+                    b.HasIndex("VolumeName", "Time");
+
+                    b.ToTable("BackupSnapshots");
+                });
+
+            modelBuilder.Entity("Track.Data.Models.BackupTarget", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Addressing")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AgentAccessKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AgentSecretKeyProtected")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Bucket")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MaintenanceAccessKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MaintenanceSecretKeyProtected")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Region")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BackupTargets");
+                });
+
+            modelBuilder.Entity("Track.Data.Models.BackupVolumeOverride", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Excluded")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VolumeName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VolumeName")
+                        .IsUnique();
+
+                    b.ToTable("BackupVolumeOverrides");
+                });
+
             modelBuilder.Entity("Track.Data.Models.BillingRate", b =>
                 {
                     b.Property<int>("Id")
                         .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("BackupStorageRatePerGbMonth")
+                        .HasColumnType("TEXT");
 
                     b.Property<decimal>("ClusterComputeMonthlyCost")
                         .HasColumnType("TEXT");
@@ -147,6 +555,9 @@ namespace Track.Data.Migrations
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BackupStorageBytes")
                         .HasColumnType("INTEGER");
 
                     b.Property<double>("BlendedPercentOfCluster")

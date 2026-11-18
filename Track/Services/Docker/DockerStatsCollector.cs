@@ -3,6 +3,8 @@ using global::Docker.DotNet;
 using global::Docker.DotNet.Models;
 using Track.Configuration;
 using Track.Data.Models;
+using Track.Enums;
+using Track.Services.Backups;
 using Track.Services.Ingest;
 using Microsoft.Extensions.Logging;
 
@@ -74,8 +76,30 @@ public sealed class DockerStatsCollector(
 
         var samples = await Task.WhenAll(tasks);
         _groupResolver.RetainOnly(containers.Select(c => c.ID).ToHashSet());
-        return new NodeCollection(capacity, [.. samples.OfType<ContainerSample>()], [.. inventory]);
+        return new NodeCollection(
+            capacity, [.. samples.OfType<ContainerSample>()], [.. inventory], VolumeMounts(containers), Role(info.Swarm));
     }
+
+    public static NodeRole Role(Info? swarm) =>
+        !string.Equals(swarm?.LocalNodeState, "active", StringComparison.OrdinalIgnoreCase) ? NodeRole.Standalone
+        : swarm!.ControlAvailable ? NodeRole.Manager
+        : NodeRole.Worker;
+
+    // Track's own restic helpers mount volumes too; they must not count as the volume's users.
+    private static List<VolumeMount> VolumeMounts(IEnumerable<ContainerListResponse> containers) =>
+        containers
+            .Where(c => c.Labels is null || !c.Labels.ContainsKey(DockerLabels.BackupJob))
+            .SelectMany(c => (c.Mounts ?? [])
+                .Where(m => m.Type == "volume" && !string.IsNullOrEmpty(m.Name))
+                .Select(m => new VolumeMount(
+                    m.Name,
+                    c.ID,
+                    c.Names?.FirstOrDefault()?.TrimStart('/') ?? c.ID,
+                    DockerLabels.GetStackName(c.Labels),
+                    DockerLabels.GetServiceName(c.Labels),
+                    c.Image,
+                    BackupLabels.Select(c.Labels))))
+            .ToList();
 
     private static async Task<ContainerStatsResponse?> GetStatsOnceAsync(
         DockerClient client, string containerId, CancellationToken cancellationToken)

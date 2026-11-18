@@ -2,11 +2,44 @@
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSnapshotStore } from '@/stores/snapshotStore'
-import { deleteAgent } from '@/api/agentsApi'
-import { formatBytes, formatCpu, memoryPercent } from '@/utils/format'
+import { approveAgent, deleteAgent, revokeAgent } from '@/api/agentsApi'
+import { apiErrorMessage } from '@/api/http'
+import { useAuthStore } from '@/stores/authStore'
+import type { NodeStatusDto } from '@/types/stats'
+import { absoluteTime, formatBytes, formatCpu, memoryPercent, relativeTime } from '@/utils/format'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const snapshotStore = useSnapshotStore()
+const authStore = useAuthStore()
+const isAdmin = computed(() => !!authStore.user?.isAdministrator)
+const approvalBusy = ref<string | null>(null)
+const approvalError = ref('')
+
+async function setApproval(node: NodeStatusDto, approve: boolean) {
+  approvalBusy.value = node.name
+  approvalError.value = ''
+  try {
+    await (approve ? approveAgent(node.name) : revokeAgent(node.name))
+  } catch (e) {
+    approvalError.value = apiErrorMessage(e, 'That didn’t work.')
+  } finally {
+    approvalBusy.value = null
+  }
+}
+
+function approvalChip(node: NodeStatusDto): { text: string; color?: string } {
+  if (node.tokenChanged) return { text: 'New token', color: 'warning' }
+  switch (node.approval) {
+    case 'Approved':
+      return { text: 'Approved', color: 'success' }
+    case 'Pending':
+      return { text: 'Pending', color: 'warning' }
+    case 'Revoked':
+      return { text: 'Revoked', color: 'error' }
+    default:
+      return { text: 'No token' }
+  }
+}
 const { nodes, snapshot } = storeToRefs(snapshotStore)
 const centralVersion = computed(() => snapshot.value?.centralVersion)
 
@@ -28,22 +61,6 @@ async function confirmDelete() {
 const sortedNodes = computed(() => [...nodes.value].sort((a, b) => a.name.localeCompare(b.name)))
 
 const onlineCount = computed(() => nodes.value.filter((n) => n.online).length)
-
-function relativeTime(iso: string | null): string {
-  if (!iso) return 'never'
-  const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000)
-  if (seconds < 5) return 'just now'
-  if (seconds < 60) return `${seconds}s ago`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
-}
-
-function absoluteTime(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : '—'
-}
 </script>
 
 <template>
@@ -64,12 +81,26 @@ function absoluteTime(iso: string | null): string {
       </v-chip>
     </div>
 
+    <v-alert
+      v-if="approvalError"
+      type="error"
+      variant="tonal"
+      density="compact"
+      closable
+      class="mb-4"
+      @click:close="approvalError = ''"
+    >
+      {{ approvalError }}
+    </v-alert>
+
     <v-card variant="outlined">
       <v-table density="comfortable">
         <thead>
           <tr>
             <th>Agent</th>
             <th>Status</th>
+            <th>Role</th>
+            <th>Backups</th>
             <th>Last seen</th>
             <th>Version</th>
             <th class="text-right">Containers</th>
@@ -94,6 +125,33 @@ function absoluteTime(iso: string | null): string {
               <span v-if="!node.online && node.error" class="text-caption text-error ml-2">
                 {{ node.error }}
               </span>
+            </td>
+            <td>{{ node.role }}</td>
+            <td class="text-no-wrap">
+              <v-chip size="small" :color="approvalChip(node).color" variant="tonal">{{
+                approvalChip(node).text
+              }}</v-chip>
+              <template v-if="isAdmin">
+                <v-btn
+                  v-if="
+                    node.approval === 'Pending' || node.approval === 'Revoked' || node.tokenChanged
+                  "
+                  size="small"
+                  variant="text"
+                  color="primary"
+                  :loading="approvalBusy === node.name"
+                  @click="setApproval(node, true)"
+                  >Approve</v-btn
+                >
+                <v-btn
+                  v-else-if="node.approval === 'Approved'"
+                  size="small"
+                  variant="text"
+                  :loading="approvalBusy === node.name"
+                  @click="setApproval(node, false)"
+                  >Revoke</v-btn
+                >
+              </template>
             </td>
             <td>
               <span :title="absoluteTime(node.lastSeen)">{{ relativeTime(node.lastSeen) }}</span>
@@ -142,7 +200,7 @@ function absoluteTime(iso: string | null): string {
             </td>
           </tr>
           <tr v-if="nodes.length === 0">
-            <td colspan="10" class="text-center text-medium-emphasis py-6">No agents yet.</td>
+            <td colspan="12" class="text-center text-medium-emphasis py-6">No agents yet.</td>
           </tr>
         </tbody>
       </v-table>

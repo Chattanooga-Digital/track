@@ -22,6 +22,7 @@ public class BillingMonthModel
     public decimal ComputeCost { get; set; }
     public decimal DiskCost { get; set; }
     public decimal ObjectStorageCost { get; set; }
+    public decimal BackupStorageCost { get; set; }
     public decimal TotalCost { get; set; }
 }
 
@@ -48,6 +49,7 @@ public class BillingCustomerModel
     public double MemoryUsedBytes { get; set; }
     public double DiskBytes { get; set; }
     public double ObjectStorageBytes { get; set; }
+    public double BackupStorageBytes { get; set; }
     public double CpuPercentOfCluster { get; set; }
     public double MemoryPercentOfCluster { get; set; }
     public double BlendedPercentOfCluster { get; set; }
@@ -56,5 +58,6 @@ public class BillingCustomerModel
     public decimal ComputeCost { get; set; }
     public decimal DiskCost { get; set; }
     public decimal ObjectStorageCost { get; set; }
+    public decimal BackupStorageCost { get; set; }
     public decimal TotalCost { get; set; }
 }

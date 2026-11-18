@@ -12,5 +12,7 @@ public class BillingRateModel
     /// <summary>Per-GB monthly rate for S3 object storage.</summary>
     public decimal ObjectStorageRatePerGbMonth { get; set; }
 
+    public decimal BackupStorageRatePerGbMonth { get; set; }
+
     public string Currency { get; set; } = "USD";
 }

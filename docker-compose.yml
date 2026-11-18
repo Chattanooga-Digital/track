@@ -13,6 +13,8 @@ services:
       Track__DataProtectionKeysPath: "/app/data/keys"
       # Shared secret agents present when pushing. Must match the agent's Track__Central__Key below.
       Track__Ingest__Key: "${TRACK_INGEST_KEY:-changeme}"
+      # Backups derive every repository password from this; in Swarm use the track_backup_master_key secret instead.
+      Track__Backups__MasterKey: "${TRACK_BACKUP_MASTER_KEY:-}"
       # Change this before deploying.
       Track__AdminPassword: "admin"
     restart: unless-stopped
@@ -25,8 +27,9 @@ services:
     depends_on:
       - track
     volumes:
-      # Read-only access to the local engine.
+      # :ro protects the socket file, not the API: the agent also starts restic helper containers through it.
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - agent-data:/app/data
     # Grant the host's docker-socket group at runtime; must equal `stat -c '%g' /var/run/docker.sock`.
     group_add:
       - "${DOCKER_GID:-988}"
@@ -40,3 +43,4 @@ services:
 
 volumes:
   track-data:
+  agent-data:

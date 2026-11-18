@@ -7,6 +7,8 @@ using Track.Website.HostedServices;
 using Track.Website.Hubs;
 using Track.Website.Queries;
 using Track.Website.Services;
+using Track.Website.Services.Backups;
+using Track.Services.Docker;
 using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,10 +25,15 @@ if (trackOptions.Mode == TrackMode.Agent)
     builder.Services.AddDockerCollectors();
     builder.Services.AddSingleton<AgentNodeNameResolver>();
     builder.Services.AddSingleton<AgentSelfUpdater>();
+    builder.Services.AddSingleton<AgentTokenStore>();
+    builder.Services.AddSingleton<SwarmInventoryCollector>();
+    builder.Services.AddSingleton<HookRunner>();
+    builder.Services.AddSingleton<BackupJobRunner>();
     builder.Services.AddHttpClient<CentralClient>(CentralClient.Configure);
     builder.Services
         .AddHostedService<StatsPushHostedService>()
-        .AddHostedService<DiskPushHostedService>();
+        .AddHostedService<DiskPushHostedService>()
+        .AddHostedService<SwarmInventoryPushHostedService>();
 
     var agent = builder.Build();
     agent.Logger.LogInformation("Starting in Agent mode, pushing to {Url}", trackOptions.Central.Url);
@@ -54,11 +61,25 @@ builder.Services
     .AddScoped<SnapshotBuilder>()
     .AddScoped<S3UsageRefresher>()
     .AddScoped<BillingSampleRecorder>()
+    .AddSingleton<AgentEnrollmentRegistry>()
+    .AddSingleton<BackupRuntimeState>()
+    .AddSingleton<BackupNotifier>()
+    .AddSingleton<ResticRunner>()
+    .AddSingleton<BackupTargetTester>()
+    .AddScoped<ResticTargets>()
+    .AddScoped<BackupCatalogService>()
+    .AddScoped<BackupJobFactory>()
+    .AddScoped<BackupScheduler>()
+    .AddScoped<SnapshotIndex>()
+    .AddScoped<BackupMaintenance>()
+    .AddHttpClient()
     .AddAuthorization()
     .AddHostedService<NodeReaperHostedService>()
     .AddHostedService<SamplePruningHostedService>()
     .AddHostedService<S3UsageHostedService>()
-    .AddHostedService<BillingSampleHostedService>();
+    .AddHostedService<BillingSampleHostedService>()
+    .AddHostedService<BackupSchedulerHostedService>()
+    .AddHostedService<BackupMaintenanceHostedService>();
 
 var app = builder.Build();
 

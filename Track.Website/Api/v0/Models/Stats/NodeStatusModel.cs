@@ -1,3 +1,5 @@
+using Track.Enums;
+
 namespace Track.Website.Api.v0.Models.Stats;
 
 public class NodeStatusModel
@@ -9,6 +11,14 @@ public class NodeStatusModel
 
     /// <summary>The agent's build version, e.g. 0.9.1.24; null for agents too old to report it.</summary>
     public string? AgentVersion { get; set; }
+
+    public NodeRole Role { get; set; }
+
+    /// <summary>Whether this agent's token may run backup jobs; null before it has sent a token.</summary>
+    public AgentApproval? Approval { get; set; }
+
+    /// <summary>An approved node name is now presenting a different token, as after a rebuild.</summary>
+    public bool TokenChanged { get; set; }
 
     /// <summary>Running containers this agent currently reports.</summary>
     public int ContainersTracked { get; set; }

@@ -21,6 +21,8 @@ public static class DatabaseInitializer
         await SeedAdminAsync(scope.ServiceProvider, logger);
         await SeedS3SourcesAsync(scope.ServiceProvider, context, logger);
         await SeedBillingRateAsync(context);
+        await SeedBackupSettingsAsync(context);
+        await scope.ServiceProvider.GetRequiredService<Track.Website.Services.Backups.AgentEnrollmentRegistry>().LoadAsync(CancellationToken.None);
 
         // Prime the identity env-var cache so grouping config survives restarts and is served on the first push.
         var identityEnvVarStore = scope.ServiceProvider.GetRequiredService<Track.Services.IdentityEnvVarStore>();
@@ -73,6 +75,15 @@ public static class DatabaseInitializer
             return;
 
         context.BillingRates.Add(new BillingRate());
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedBackupSettingsAsync(TrackContext context)
+    {
+        if (await context.BackupSettings.AnyAsync())
+            return;
+
+        context.BackupSettings.Add(new BackupSettings());
         await context.SaveChangesAsync();
     }
 

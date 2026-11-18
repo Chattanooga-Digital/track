@@ -10,6 +10,11 @@ public static class DockerLabels
     /// <summary>Names the stack of a container run outside Swarm and Compose; Track's own image sets it.</summary>
     public const string TrackStack = "digital.chattanooga.track.stack";
 
+    /// <summary>Marks a restic helper container with the backup job it runs.</summary>
+    public const string BackupJob = "digital.chattanooga.track.backup.job";
+
+    public const string RestoreOf = "digital.chattanooga.track.restore-of";
+
     public static string? GetStackName(IDictionary<string, string>? labels) =>
         GetLabel(labels, StackNamespace) ?? GetLabel(labels, ComposeProject) ?? GetLabel(labels, TrackStack);
 

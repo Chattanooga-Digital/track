@@ -24,6 +24,9 @@ public class BillingRate : IEntityTypeConfiguration<BillingRate>
     /// <summary>Per-GB monthly rate for S3 object storage.</summary>
     public decimal ObjectStorageRatePerGbMonth { get; set; }
 
+    /// <summary>Per-GB monthly rate for each customer's off-site backup repository.</summary>
+    public decimal BackupStorageRatePerGbMonth { get; set; }
+
     public string Currency { get; set; } = "USD";
 
     public DateTime UpdatedUtc { get; set; }

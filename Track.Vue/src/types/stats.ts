@@ -17,12 +17,14 @@ export interface UsageTotalsDto {
   memoryLimitBytes: number
   diskBytes: number
   objectStorageBytes: number
+  backupStorageBytes: number
   cpuPercentOfCluster: number
   memoryPercentOfCluster: number
   blendedPercentOfCluster: number
   computeCost: number
   diskCost: number
   objectStorageCost: number
+  backupStorageCost: number
   totalCost: number
 }
 
@@ -60,6 +62,9 @@ export interface NodeStatusDto {
   error: string | null
   lastSeen: string | null
   agentVersion: string | null
+  role: 'Standalone' | 'Worker' | 'Manager'
+  approval: 'Pending' | 'Approved' | 'Revoked' | null
+  tokenChanged: boolean
   containersTracked: number
   unidentifiedContainers: number
   cpuCores: number
@@ -75,6 +80,7 @@ export interface SnapshotDto {
   totals: UsageTotalsDto
   nodes: NodeStatusDto[]
   customers: CustomerGroupDto[]
+  backupsNeedingAttention: number
   currency: string
 }
 
@@ -92,12 +98,14 @@ export interface BillingCustomerDto {
   memoryUsedBytes: number
   diskBytes: number
   objectStorageBytes: number
+  backupStorageBytes: number
   cpuPercentOfCluster: number
   memoryPercentOfCluster: number
   blendedPercentOfCluster: number
   computeCost: number
   diskCost: number
   objectStorageCost: number
+  backupStorageCost: number
   totalCost: number
 }
 
@@ -112,6 +120,7 @@ export interface BillingMonthDto {
   computeCost: number
   diskCost: number
   objectStorageCost: number
+  backupStorageCost: number
   totalCost: number
 }
 
@@ -119,6 +128,7 @@ export interface BillingRateDto {
   clusterComputeMonthlyCost: number
   diskRatePerGbMonth: number
   objectStorageRatePerGbMonth: number
+  backupStorageRatePerGbMonth: number
   currency: string
 }
 

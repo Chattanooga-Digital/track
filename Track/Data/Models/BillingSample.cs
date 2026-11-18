@@ -28,6 +28,7 @@ public class BillingSample : IEntityTypeConfiguration<BillingSample>
     public long MemoryUsedBytes { get; set; }
     public long DiskBytes { get; set; }
     public long ObjectStorageBytes { get; set; }
+    public long BackupStorageBytes { get; set; }
     public double CpuPercentOfCluster { get; set; }
     public double MemoryPercentOfCluster { get; set; }
     public double BlendedPercentOfCluster { get; set; }

@@ -58,10 +58,12 @@ interface BillingRow {
   isShared: boolean
   diskBytes: number
   objectStorageBytes: number
+  backupStorageBytes: number
   blendedPercentOfCluster: number
   computeCost: number
   diskCost: number
   objectStorageCost: number
+  backupStorageCost: number
   totalCost: number
 }
 
@@ -73,10 +75,12 @@ const allRows = computed<BillingRow[]>(() =>
         isShared: c.isShared,
         diskBytes: c.totals.diskBytes,
         objectStorageBytes: c.totals.objectStorageBytes,
+        backupStorageBytes: c.totals.backupStorageBytes,
         blendedPercentOfCluster: c.totals.blendedPercentOfCluster,
         computeCost: c.totals.computeCost,
         diskCost: c.totals.diskCost,
         objectStorageCost: c.totals.objectStorageCost,
+        backupStorageCost: c.totals.backupStorageCost,
         totalCost: c.totals.totalCost,
       }))
     : ((monthData.value?.customers ?? []) as BillingCustomerDto[]),
@@ -153,6 +157,7 @@ const rateForm = reactive<BillingRateDto>({
   clusterComputeMonthlyCost: 0,
   diskRatePerGbMonth: 0,
   objectStorageRatePerGbMonth: 0,
+  backupStorageRatePerGbMonth: 0,
   currency: 'USD',
 })
 
@@ -169,6 +174,7 @@ async function saveRates() {
       clusterComputeMonthlyCost: Number(rateForm.clusterComputeMonthlyCost) || 0,
       diskRatePerGbMonth: Number(rateForm.diskRatePerGbMonth) || 0,
       objectStorageRatePerGbMonth: Number(rateForm.objectStorageRatePerGbMonth) || 0,
+      backupStorageRatePerGbMonth: Number(rateForm.backupStorageRatePerGbMonth) || 0,
       currency: rateForm.currency.trim() || 'USD',
     })
     rateDialog.value = false
@@ -277,6 +283,7 @@ async function saveRates() {
             <div role="columnheader" class="text-right">Compute</div>
             <div role="columnheader" class="text-right">Disk</div>
             <div role="columnheader" class="text-right">Object storage</div>
+            <div role="columnheader" class="text-right">Backups</div>
             <div role="columnheader" class="text-right">Total</div>
           </div>
 
@@ -312,6 +319,12 @@ async function saveRates() {
                 {{ formatBytes(c.objectStorageBytes) }}
               </div>
             </div>
+            <div role="cell" class="text-right">
+              <div>{{ money(c.backupStorageCost) }}</div>
+              <div class="text-caption text-medium-emphasis">
+                {{ formatBytes(c.backupStorageBytes) }}
+              </div>
+            </div>
             <div role="cell" class="text-right text-subtitle-1 font-weight-medium">
               {{ money(c.totalCost) }}
             </div>
@@ -333,6 +346,7 @@ async function saveRates() {
             <div role="cell" class="text-right">{{ money(u.computeCost) }}</div>
             <div role="cell" class="text-right">{{ formatBytes(u.diskBytes) }}</div>
             <div role="cell" class="text-right">{{ formatBytes(u.objectStorageBytes) }}</div>
+            <div role="cell" class="text-right">{{ formatBytes(u.backupStorageBytes) }}</div>
             <div role="cell" class="text-right">{{ money(u.totalCost) }}</div>
           </div>
 
@@ -355,6 +369,7 @@ async function saveRates() {
             <div role="cell" class="text-right">{{ money(totals?.computeCost) }}</div>
             <div role="cell" class="text-right">{{ money(totals?.diskCost) }}</div>
             <div role="cell" class="text-right">{{ money(totals?.objectStorageCost) }}</div>
+            <div role="cell" class="text-right">{{ money(totals?.backupStorageCost) }}</div>
             <div role="cell" class="text-right text-subtitle-1 font-weight-medium">
               {{ money(totalBilled) }}
             </div>
@@ -401,6 +416,15 @@ async function saveRates() {
             class="mb-3"
           />
           <v-text-field
+            v-model.number="rateForm.backupStorageRatePerGbMonth"
+            type="number"
+            min="0"
+            label="Backups per GB per month"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+          />
+          <v-text-field
             v-model="rateForm.currency"
             label="Currency"
             variant="outlined"
@@ -440,7 +464,7 @@ async function saveRates() {
 
 .billing-grid {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) 200px 110px 110px 130px 120px;
+  grid-template-columns: minmax(200px, 1fr) 200px 110px 110px 130px 110px 120px;
   gap: 16px;
   align-items: center;
   padding: 0 20px;

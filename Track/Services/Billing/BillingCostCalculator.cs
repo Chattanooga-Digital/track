@@ -3,9 +3,9 @@ using Track.Data.Models;
 namespace Track.Services.Billing;
 
 /// <summary>One scope's dollar breakdown.</summary>
-public readonly record struct BillingCosts(decimal ComputeCost, decimal DiskCost, decimal ObjectStorageCost)
+public readonly record struct BillingCosts(decimal ComputeCost, decimal DiskCost, decimal ObjectStorageCost, decimal BackupStorageCost)
 {
-    public decimal TotalCost => ComputeCost + DiskCost + ObjectStorageCost;
+    public decimal TotalCost => ComputeCost + DiskCost + ObjectStorageCost + BackupStorageCost;
 }
 
 /// <summary>
@@ -23,11 +23,12 @@ public static class BillingCostCalculator
 
     /// <summary>One scope's costs. Pass blended 0 for the unassigned group so it bills nothing.</summary>
     public static BillingCosts ForScope(
-        double blendedPercent, decimal baseRate, double diskBytes, double objectStorageBytes, BillingRate rate)
+        double blendedPercent, decimal baseRate, double diskBytes, double objectStorageBytes, double backupStorageBytes, BillingRate rate)
     {
         var compute = baseRate * (decimal)blendedPercent;
         var disk = (decimal)diskBytes / BytesPerGb * rate.DiskRatePerGbMonth;
         var obj = (decimal)objectStorageBytes / BytesPerGb * rate.ObjectStorageRatePerGbMonth;
-        return new BillingCosts(compute, disk, obj);
+        var backup = (decimal)backupStorageBytes / BytesPerGb * rate.BackupStorageRatePerGbMonth;
+        return new BillingCosts(compute, disk, obj, backup);
     }
 }

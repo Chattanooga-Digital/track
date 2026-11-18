@@ -43,6 +43,8 @@ LABEL digital.chattanooga.track.stack="track"
 WORKDIR /app
 COPY --from=publish /app/publish .
 COPY --from=vuebuild /src/Track.Website/wwwroot wwwroot
+# The central runs restic for repository maintenance; agents run this same image as their restic helper.
+COPY --from=restic/restic:0.18.1 /usr/bin/restic /usr/local/bin/restic
 USER root
 RUN chown -R appuser:docker /app
 USER appuser

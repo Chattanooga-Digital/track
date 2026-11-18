@@ -30,7 +30,8 @@ public class BillingRatesController(
     [HttpPut]
     public async Task<IActionResult> Update([FromBody] BillingRateModel model, CancellationToken cancellationToken)
     {
-        if (model.ClusterComputeMonthlyCost < 0 || model.DiskRatePerGbMonth < 0 || model.ObjectStorageRatePerGbMonth < 0)
+        if (model.ClusterComputeMonthlyCost < 0 || model.DiskRatePerGbMonth < 0 || model.ObjectStorageRatePerGbMonth < 0
+            || model.BackupStorageRatePerGbMonth < 0)
             return BadRequest("Rates cannot be negative.");
 
         var rate = await TrackContext.BillingRates.FirstOrDefaultAsync(cancellationToken);
@@ -43,6 +44,7 @@ public class BillingRatesController(
         rate.ClusterComputeMonthlyCost = model.ClusterComputeMonthlyCost;
         rate.DiskRatePerGbMonth = model.DiskRatePerGbMonth;
         rate.ObjectStorageRatePerGbMonth = model.ObjectStorageRatePerGbMonth;
+        rate.BackupStorageRatePerGbMonth = model.BackupStorageRatePerGbMonth;
         rate.Currency = string.IsNullOrWhiteSpace(model.Currency) ? "USD" : model.Currency.Trim().ToUpperInvariant();
         rate.UpdatedUtc = DateTime.UtcNow;
 
@@ -55,6 +57,7 @@ public class BillingRatesController(
         ClusterComputeMonthlyCost = rate.ClusterComputeMonthlyCost,
         DiskRatePerGbMonth = rate.DiskRatePerGbMonth,
         ObjectStorageRatePerGbMonth = rate.ObjectStorageRatePerGbMonth,
+        BackupStorageRatePerGbMonth = rate.BackupStorageRatePerGbMonth,
         Currency = rate.Currency,
     };
 }

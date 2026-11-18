@@ -6,7 +6,8 @@ Track is a Docker Swarm monitoring app. It polls the Docker engine on one or mor
 nodes at a regular interval for per-container CPU, memory, and disk usage, groups
 those containers into **stacks** (by Docker/Compose labels), and groups stacks into
 **customers** (a user-defined mapping). A Vue 3 dashboard shows live totals per
-customer and per stack, and historical charts.
+customer and per stack, and historical charts. It also backs up every volume to
+off-site S3 with restic (see **Backups**).
 
 ## Solution Structure
 
@@ -96,8 +97,9 @@ and `Role : IdentityRole<Guid>` (`Track/Data/Models/`), and `TrackContext` deriv
 - `AuthController` (`/api/v0/auth`) exposes `login` (`SignInManager.PasswordSignInAsync`,
   `lockoutOnFailure: true`), `logout` (`SignInManager.SignOutAsync`), and `me`.
 - All data + configuration endpoints (`StatsController`, `CustomersController`,
-  `StacksController`, `BucketsController`, `S3SourcesController`) and the SignalR hub carry
-  `[Authorize]`. Only the auth and health
+  `StacksController`, `BucketsController`, `S3SourcesController`, `BackupsController`) and the
+  SignalR hub carry `[Authorize]`. Approving agents, editing the backup target and replacing live
+  data need the `Administrators` role. Only the auth and health
   endpoints and the static SPA files are anonymous — the SPA loads, then shows the login
   screen until `/auth/me` succeeds.
 - Auth-cookie signing keys are Data Protection keys; set `Track:DataProtectionKeysPath`
@@ -237,6 +239,65 @@ then flows through the normal stack → customer assignment unchanged.
 - A container with no matching identity var stays in the inventory (`GET /api/v0/inventory`)
   awaiting a choice; there is no image fallback (images collide across customers).
 
+## Backups
+
+Every volume is backed up nightly with **restic** to one off-site S3 bucket, unless a label or Track
+excludes it. Track decides which volumes, when and where; each stack's labels say how to dump its
+data; restic does chunking, dedupe, encryption and upload. Backup data goes node → S3 directly, never
+through the central.
+
+- **Agent approval.** Each agent keeps a random token at `Track:AgentTokenPath` (`/app/data/agent-token`;
+  mount a volume there) and sends it as `X-Track-Agent-Token` with the ingest key.
+  `AgentEnrollmentRegistry` (central, `AgentEnrollment` table) ties a node name to one token. Metrics
+  are accepted from any agent, but only an **approved** token gets jobs, and only approved agents'
+  volume, mount and swarm reports feed the catalog, because those decide which commands run where.
+  Approve, revoke or accept a changed token on the Agents page (`POST /agents/{name}/approve|revoke`).
+- **What exists where.** Stats pushes carry the node's `NodeRole` and every running container's volume
+  mounts with its `backupbot.*` labels (`VolumeMount`). Disk pushes give volume sizes. Manager agents
+  push a `SwarmReport` (`/api/v0/ingest/swarm`): services, running tasks per node, mounts, placement
+  constraints and service labels, which only a manager's engine can list. `BackupCatalog.Build` (pure,
+  tested) turns that into one entry per copy that matters: `Single` (the copy a running container
+  uses), `PerNode` (a global service, or mounted on several nodes: key `volume@node`), `StaleCopy`
+  (leftover on a node that doesn't use it, not backed up) and `Ambiguous`. Dangling anonymous volumes,
+  restore volumes and the restic cache volume are skipped.
+- **Labels** use backup-bot-two's names (`BackupLabels`): `backupbot.backup: "false"`,
+  `backupbot.backup.volumes.<name>: "false"` and `.path`, `backupbot.backup.pre-hook|post-hook`,
+  `backupbot.restore.pre-hook|post-hook`. `<name>` may be the full volume name or the compose key.
+  `BackupVolumeOverride` rows (UI) win over labels. A database image with no pre-hook is flagged.
+- **Repositories.** One restic repo per owner under the target prefix: `customer-{id}`, `shared`,
+  `unassigned` (`BackupRepository`). Passwords are never stored: `RepoPasswordDeriver` is
+  HMAC-SHA256(master key, repo key), base64, matching
+  `printf %s "$REPO" | openssl dgst -sha256 -hmac "$MASTER_KEY" -binary | base64`. The master key comes
+  from `Track:Backups:MasterKey` or the Swarm secret file `Track:Backups:MasterKeyFile`
+  (`/run/secrets/track_backup_master_key`). `BackupTarget` holds the bucket and two keys (agent key for
+  writing, maintenance key for prune), encrypted with Data Protection; it is not an `S3Source`.
+- **Jobs** (`BackupJob`). Settings start paused. `BackupScheduler` (every 30s) queues each protected volume once its daily
+  slot passes (`BackupSettings.BackupMinuteUtc` plus a stable per-volume offset inside `SpreadMinutes`),
+  dispatches within `MaxJobsPerNode`/`MaxJobsTotal`, initialises repos with `restic init`, requeues jobs
+  an agent never fetched and fails ones whose agent went quiet. The push response lists an approved
+  node's job IDs; the agent fetches each from `/api/v0/agent/jobs/{id}` (the repo password is derived
+  there), posts progress (which answers with a cancel flag) and a result.
+- **Agent execution** (`BackupJobRunner`). Hooks run with `docker exec` (`sh -c`) in the service's
+  running container (`HookRunner`); a failed pre-hook uploads nothing, post-hooks always run. restic
+  runs in a helper container from the agent's own image (restic is bundled at `/usr/local/bin/restic`)
+  as root, with the volume at `/data/<volume>` (read-only for backups) and a node cache volume,
+  labelled `digital.chattanooga.track.backup.job`. A restarted agent adopts its helper instead of
+  starting another. The restic host is the catalog key, so parent snapshots survive a node move.
+- **Restore.** New volume (`<volume>-restore-<yyyyMMdd-HHmmss>`), download (`restic dump` streamed by the
+  central), or **replace**: a `Replace` parent job walks child steps (safety snapshot without hooks or
+  path filters, restore pre-hook, scale services to 0 via a manager agent, `restic restore --delete`,
+  scale back, restore post-hook). Non-swarm containers are stopped and started by the node's agent.
+  `BackupCatalogService.ReplaceBlockedReason` refuses unless the service's placement resolves to the
+  volume's node alone. Safety snapshots are tagged `track-pre-restore` so they never take a day's
+  retention slot; regular ones are tagged `track`.
+- **Maintenance** (`BackupMaintenance`, central, every minute when due): weekly `forget` per
+  `KeepDaily/Weekly/Monthly` grouped by host, pre-restore snapshots kept 30 days, `prune`, repo size
+  from `restic stats` (billed per customer as backup storage), snapshot index resync, and a monthly
+  `check --read-data-subset`. A failed run backs off for an hour (a cancelled backup's lock goes stale
+  after 30 minutes). The bucket should have versioning and default object-lock retention so a stolen
+  agent key can't destroy history; the target test checks that.
+- The Backups page reloads on the hub's `backups` event (`snapshotStore.backupsVersion`).
+
 ## Multi-Node / Swarm Configuration
 
 `docker stats` and `/system/df` are per-engine — a node only reports its own
@@ -261,6 +322,9 @@ Track__Central__Url     e.g. http://track:5020 (central's swarm service name on 
 Track__Central__Key     must equal the central's Track__Ingest__Key
 Track__NodeName         optional; in Swarm set to {{.Node.Hostname}} (else the engine hostname is used)
 ```
+
+Give the agent a volume at `/app/data` so its token survives redeploys; otherwise every new task is
+a new, unapproved agent.
 
 The agent reads its own socket, so it still needs the docker-socket group. In the stack
 that is `user: "5678:<GID>"` where `<GID>` is `stat -c '%g' /var/run/docker.sock` on the
@@ -421,4 +485,7 @@ label. No browser dialogs (`confirm`/`alert`/`prompt`); use `ConfirmDialog` or a
 - Don't poll `/system/df` on the fast stats interval; it is heavy.
 - Don't load full entities or use synchronous EF calls.
 - Don't let one unreachable node fail the whole poll — failures are per-node.
+- Don't trust volume, mount, swarm or label data from an agent that isn't approved: hook commands
+  come from labels and run via `docker exec`.
+- Don't store repository passwords; derive them from the master key.
 ```

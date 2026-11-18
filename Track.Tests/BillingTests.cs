@@ -25,7 +25,7 @@ public class BillingTests
     }
 
     private static StatsController NewController(TrackContext context) =>
-        new(NullLogger<StatsController>.Instance, context, new SnapshotBuilder(context, new CurrentStateHolder()));
+        new(NullLogger<StatsController>.Instance, context, TestSnapshotBuilder.Create(context, new CurrentStateHolder()));
 
     [Test]
     public async Task RecordAsync_WritesOneCapacityRowAndOneRowPerCustomer()
@@ -58,7 +58,7 @@ public class BillingTests
             ],
             []), DateTime.UtcNow);
 
-        var recorded = await new BillingSampleRecorder(context, new SnapshotBuilder(context, holder)).RecordAsync();
+        var recorded = await new BillingSampleRecorder(context, TestSnapshotBuilder.Create(context, holder)).RecordAsync();
 
         Assert.That(recorded, Is.True);
 
@@ -82,7 +82,7 @@ public class BillingTests
         await using var _ = connection;
         await using var __ = context;
 
-        var recorded = await new BillingSampleRecorder(context, new SnapshotBuilder(context, new CurrentStateHolder()))
+        var recorded = await new BillingSampleRecorder(context, TestSnapshotBuilder.Create(context, new CurrentStateHolder()))
             .RecordAsync();
 
         Assert.That(recorded, Is.False);

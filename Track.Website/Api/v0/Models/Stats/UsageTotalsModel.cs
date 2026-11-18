@@ -12,6 +12,9 @@ public class UsageTotalsModel
     /// <summary>S3 bucket storage assigned to this scope. Kept separate from node-local <see cref="DiskBytes"/>.</summary>
     public long ObjectStorageBytes { get; set; }
 
+    /// <summary>Size of the scope's off-site backup repository, as of its last prune.</summary>
+    public long BackupStorageBytes { get; set; }
+
     /// <summary>Consumed CPU as a share of total cluster cores (0-100).</summary>
     public double CpuPercentOfCluster { get; set; }
 
@@ -30,6 +33,8 @@ public class UsageTotalsModel
     /// <summary>Object storage charge at the flat per-GB rate.</summary>
     public decimal ObjectStorageCost { get; set; }
 
-    /// <summary>Compute + disk + object storage.</summary>
+    public decimal BackupStorageCost { get; set; }
+
+    /// <summary>Compute + disk + object storage + backup storage.</summary>
     public decimal TotalCost { get; set; }
 }

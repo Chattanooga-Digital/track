@@ -69,7 +69,7 @@ public class SnapshotBuilderSharedStackTests
         await using var _ = connection;
         await using var __ = context;
 
-        var snapshot = await new SnapshotBuilder(context, holder).BuildAsync();
+        var snapshot = await TestSnapshotBuilder.Create(context, holder).BuildAsync();
 
         var shared = snapshot.Customers.Single(c => c.IsShared);
         Assert.That(shared.CustomerId, Is.Null);
@@ -120,7 +120,7 @@ public class SnapshotBuilderSharedStackTests
         await using var _ = connection;
         await using var __ = context;
 
-        await new BillingSampleRecorder(context, new SnapshotBuilder(context, holder)).RecordAsync();
+        await new BillingSampleRecorder(context, TestSnapshotBuilder.Create(context, holder)).RecordAsync();
 
         var unbilled = await context.BillingSamples.Where(s => s.CustomerId == null).ToListAsync();
         Assert.That(unbilled.Count(s => s.IsShared), Is.EqualTo(1));

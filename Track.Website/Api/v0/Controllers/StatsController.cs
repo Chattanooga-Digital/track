@@ -122,6 +122,7 @@ public class StatsController(
                 MemoryUsedBytes = g.Sum(s => (double)s.MemoryUsedBytes),
                 DiskBytes = g.Sum(s => (double)s.DiskBytes),
                 ObjectStorageBytes = g.Sum(s => (double)s.ObjectStorageBytes),
+                BackupStorageBytes = g.Sum(s => (double)s.BackupStorageBytes),
                 CpuPercentOfCluster = g.Sum(s => s.CpuPercentOfCluster),
                 MemoryPercentOfCluster = g.Sum(s => s.MemoryPercentOfCluster),
                 BlendedPercentOfCluster = g.Sum(s => s.BlendedPercentOfCluster),
@@ -144,6 +145,7 @@ public class StatsController(
                 MemoryUsedBytes = g.MemoryUsedBytes / sampleCount,
                 DiskBytes = g.DiskBytes / sampleCount,
                 ObjectStorageBytes = g.ObjectStorageBytes / sampleCount,
+                BackupStorageBytes = g.BackupStorageBytes / sampleCount,
                 CpuPercentOfCluster = g.CpuPercentOfCluster / sampleCount,
                 MemoryPercentOfCluster = g.MemoryPercentOfCluster / sampleCount,
                 BlendedPercentOfCluster = g.BlendedPercentOfCluster / sampleCount,
@@ -166,16 +168,19 @@ public class StatsController(
                 baseRate,
                 assigned ? c.DiskBytes : 0,
                 assigned ? c.ObjectStorageBytes : 0,
+                assigned ? c.BackupStorageBytes : 0,
                 rate);
             c.ComputeCost = costs.ComputeCost;
             c.DiskCost = costs.DiskCost;
             c.ObjectStorageCost = costs.ObjectStorageCost;
+            c.BackupStorageCost = costs.BackupStorageCost;
             c.TotalCost = costs.TotalCost;
         }
         model.ComputeCost = model.Customers.Sum(c => c.ComputeCost);
         model.DiskCost = model.Customers.Sum(c => c.DiskCost);
         model.ObjectStorageCost = model.Customers.Sum(c => c.ObjectStorageCost);
-        model.TotalCost = model.ComputeCost + model.DiskCost + model.ObjectStorageCost;
+        model.BackupStorageCost = model.Customers.Sum(c => c.BackupStorageCost);
+        model.TotalCost = model.ComputeCost + model.DiskCost + model.ObjectStorageCost + model.BackupStorageCost;
 
         return Ok(model);
     }

@@ -1,4 +1,5 @@
 using Track.Data.Models;
+using Track.Enums;
 
 namespace Track.Services.Ingest;
 
@@ -13,7 +14,37 @@ public record StatsReport(
     NodeCapacity Capacity,
     List<ContainerSample> Samples,
     List<LabelLessContainer> Inventory,
-    string? AgentVersion = null);
+    string? AgentVersion = null,
+    NodeRole Role = NodeRole.Standalone,
+    List<VolumeMount>? Mounts = null);
+
+/// <summary>A volume mounted by a running container, with the container's <c>backupbot.*</c> labels and nothing else.</summary>
+public record VolumeMount(
+    string VolumeName,
+    string ContainerId,
+    string ContainerName,
+    string? StackName,
+    string? ServiceName,
+    string? Image,
+    Dictionary<string, string> BackupLabels);
+
+/// <summary>A manager agent's view of the swarm: what only a manager's engine can answer.</summary>
+public record SwarmReport(string NodeName, DateTime Timestamp, List<SwarmNodeInfo> Nodes, List<SwarmServiceInfo> Services);
+
+public record SwarmNodeInfo(string Hostname, string Role, string Availability, string State, Dictionary<string, string> Labels);
+
+public record SwarmServiceInfo(
+    string Name,
+    string? StackName,
+    string? Image,
+    bool Global,
+    ulong? Replicas,
+    List<string> Volumes,
+    List<string> Constraints,
+    Dictionary<string, string> BackupLabels,
+    List<SwarmTaskInfo> RunningTasks);
+
+public record SwarmTaskInfo(string NodeHostname, string? ContainerId);
 
 /// <summary>One agent's disk-usage push: per-container writable-layer sizes and per-volume sizes.</summary>
 public record DiskReport(string NodeName, DateTime Timestamp, List<DiskSample> Samples);
@@ -27,6 +58,11 @@ public record LabelLessContainer(string ContainerId, string ContainerName, strin
 
 /// <summary>
 /// The central's response to a stats push: the authoritative ordered list of env var names to use as
-/// grouping identities, and the central's build version, which standalone agents update themselves to.
+/// grouping identities, the central's build version (which standalone agents update themselves to), the
+/// agent's approval, and, once approved, the backup jobs waiting for it.
 /// </summary>
-public record IngestResponse(List<string> IdentityEnvVars, string? Version = null);
+public record IngestResponse(
+    List<string> IdentityEnvVars,
+    string? Version = null,
+    AgentApproval? Approval = null,
+    List<long>? BackupJobIds = null);

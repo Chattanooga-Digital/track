@@ -7,6 +7,8 @@ import { getCurrent } from '@/api/statsApi'
 export const useSnapshotStore = defineStore('snapshot', () => {
   const snapshot = ref<SnapshotDto | null>(null)
   const connected = ref(false)
+  // Bumped whenever the server says backup jobs or volumes changed; the Backups page watches it.
+  const backupsVersion = ref(0)
   let connection: signalR.HubConnection | null = null
 
   const nodes = computed(() => snapshot.value?.nodes ?? [])
@@ -32,6 +34,9 @@ export const useSnapshotStore = defineStore('snapshot', () => {
 
     connection.on('snapshot', (payload: SnapshotDto) => {
       snapshot.value = payload
+    })
+    connection.on('backups', () => {
+      backupsVersion.value++
     })
 
     connection.onreconnected(() => {
@@ -74,6 +79,7 @@ export const useSnapshotStore = defineStore('snapshot', () => {
   return {
     snapshot,
     connected,
+    backupsVersion,
     nodes,
     customers,
     offlineNodes,

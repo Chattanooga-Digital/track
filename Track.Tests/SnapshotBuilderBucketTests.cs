@@ -42,7 +42,7 @@ public class SnapshotBuilderBucketTests
         var holder = new CurrentStateHolder();
         holder.SetBucketUsage("minio-a", [Bucket("minio-a", "nextcloud", 4_700), Bucket("minio-a", "orphan", 1_000)]);
 
-        var snapshot = await new SnapshotBuilder(context, holder).BuildAsync();
+        var snapshot = await TestSnapshotBuilder.Create(context, holder).BuildAsync();
 
         var acme = snapshot.Customers.Single(c => c.CustomerId == customer.Id);
         Assert.That(acme.Buckets.Select(b => b.BucketName), Is.EquivalentTo(new[] { "nextcloud" }));
@@ -64,7 +64,7 @@ public class SnapshotBuilderBucketTests
         var holder = new CurrentStateHolder();
         holder.SetBucketUsage("minio-a", [Bucket("minio-a", "nextcloud", 4_700)]);
 
-        var snapshot = await new SnapshotBuilder(context, holder).BuildAsync();
+        var snapshot = await TestSnapshotBuilder.Create(context, holder).BuildAsync();
 
         // No containers or volumes were reported, so node-local disk stays zero while object storage is counted.
         Assert.That(snapshot.Totals.DiskBytes, Is.EqualTo(0));

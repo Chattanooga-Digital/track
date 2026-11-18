@@ -4,7 +4,8 @@ using Track.Services.Ingest;
 
 namespace Track.Services;
 
-public record NodeStatus(string Name, bool Online, string? Error, DateTime? LastSeen, string? AgentVersion = null);
+public record NodeStatus(
+    string Name, bool Online, string? Error, DateTime? LastSeen, string? AgentVersion = null, NodeRole Role = NodeRole.Standalone);
 
 /// <summary>Total schedulable capacity of one Docker node.</summary>
 public record NodeCapacity(string NodeName, long CpuCores, long MemoryBytes);
@@ -13,7 +14,12 @@ public record NodeCapacity(string NodeName, long CpuCores, long MemoryBytes);
 /// Result of one node's stats poll: its capacity, a sample per running container, and the inventory of
 /// label-less standalone containers (for the central to offer as groupable identities).
 /// </summary>
-public record NodeCollection(NodeCapacity Capacity, List<ContainerSample> Samples, List<LabelLessContainer> Inventory);
+public record NodeCollection(
+    NodeCapacity Capacity,
+    List<ContainerSample> Samples,
+    List<LabelLessContainer> Inventory,
+    List<VolumeMount>? Mounts = null,
+    NodeRole Role = NodeRole.Standalone);
 
 /// <summary>Summed capacity across all online nodes.</summary>
 public record ClusterCapacity(int NodeCount, long CpuCores, long MemoryBytes);
@@ -47,7 +53,7 @@ public sealed class CurrentStateHolder
         {
             _samplesByNode[nodeName] = collection.Samples;
             _capacityByNode[nodeName] = collection.Capacity;
-            _nodes[nodeName] = new NodeStatus(nodeName, true, null, timestamp, agentVersion);
+            _nodes[nodeName] = new NodeStatus(nodeName, true, null, timestamp, agentVersion, collection.Role);
         }
     }
 
@@ -59,7 +65,8 @@ public sealed class CurrentStateHolder
             _samplesByNode.Remove(nodeName);
             _capacityByNode.Remove(nodeName);
             var previous = _nodes.GetValueOrDefault(nodeName);
-            _nodes[nodeName] = new NodeStatus(nodeName, false, error, previous?.LastSeen, previous?.AgentVersion);
+            _nodes[nodeName] = new NodeStatus(
+                nodeName, false, error, previous?.LastSeen, previous?.AgentVersion, previous?.Role ?? NodeRole.Standalone);
         }
     }
 

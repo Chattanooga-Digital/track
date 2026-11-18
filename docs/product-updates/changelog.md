@@ -4,6 +4,16 @@ Welcome to the Track changelog. Here you'll find a history of product updates,
 improvements, bug fixes, and new features by version.
 
 ## Releases
+### 0.10.0 - 2026-11-18
+#### Features
+ - Backups: every volume is backed up nightly with restic to an off-site S3 bucket, one encrypted repository per customer, and only changed data is uploaded. They start paused until you unpause them in Backups settings
+ - The new Backups page shows each volume's last good backup, flags stale or failing ones and databases with no dump hook, and lets you back up, exclude or restore a volume
+ - Restore to a new volume, download a snapshot as a tar file, or replace a volume's live data with its services stopped and a safety snapshot taken first
+ - Stacks can use backup-bot-two labels to dump databases before a backup, skip volumes or paths, and run restore hooks
+ - Old snapshots are pruned weekly and part of each repository is verified monthly; an optional heartbeat URL is pinged while backups are healthy
+ - Agents must be approved on the Agents page before they run backups, and each node's role is shown
+ - Billing shows each customer's backup storage, with its own per-GB rate
+
 ### 0.9.1 - 2026-11-03
 #### Features
  - Agents run outside the swarm update themselves to the central's version

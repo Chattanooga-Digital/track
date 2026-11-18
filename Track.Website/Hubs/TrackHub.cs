@@ -10,4 +10,7 @@ public class TrackHub : Hub
 
     /// <summary>Event name for the grouped snapshot broadcast after every stats poll.</summary>
     public const string SnapshotEvent = "snapshot";
+
+    /// <summary>Backup jobs or volumes changed; the Backups page reloads.</summary>
+    public const string BackupsEvent = "backups";
 }

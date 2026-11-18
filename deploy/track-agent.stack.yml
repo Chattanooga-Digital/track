@@ -11,7 +11,10 @@ services:
     networks:
       - traefik_net                  # same overlay as the central service, so `track` resolves
     volumes:
+      # :ro protects the socket file, not the API: the agent also starts restic helper containers through it.
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Keeps the token that ties this node to its approval on the Agents page.
+      - agent-data:/app/data
     # Run as the image's non-root user with the node's docker-socket group so it can read the socket.
     # 988 is this cluster's socket GID (stat -c '%g' /var/run/docker.sock); change if your nodes differ.
     user: "5678:988"
@@ -32,3 +35,6 @@ services:
 networks:
   traefik_net:
     external: true
+
+volumes:
+  agent-data:

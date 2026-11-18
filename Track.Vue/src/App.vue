@@ -17,6 +17,13 @@ const version = ref('')
 const unidentifiedCount = computed(() =>
   snapshotStore.nodes.reduce((sum, node) => sum + node.unidentifiedContainers, 0),
 )
+const backupsNeedingAttention = computed(() => snapshotStore.snapshot?.backupsNeedingAttention ?? 0)
+const pendingAgents = computed(
+  () =>
+    snapshotStore.nodes.filter(
+      (node) => (node.approval !== 'Approved' && node.approval !== 'Revoked') || node.tokenChanged,
+    ).length,
+)
 
 onMounted(async () => {
   authStore.initialize()
@@ -77,6 +84,13 @@ async function logout() {
           <v-list-subheader>Usage</v-list-subheader>
           <v-list-item to="/" exact prepend-icon="mdi-view-dashboard" title="Dashboard" />
           <v-list-item to="/billing" prepend-icon="mdi-cash-multiple" title="Billing" />
+          <v-list-item to="/backups" prepend-icon="mdi-backup-restore" title="Backups">
+            <template v-if="backupsNeedingAttention > 0" #append>
+              <v-chip size="x-small" color="warning" variant="tonal">{{
+                backupsNeedingAttention
+              }}</v-chip>
+            </template>
+          </v-list-item>
 
           <v-list-subheader>Setup</v-list-subheader>
           <v-list-item to="/customers" prepend-icon="mdi-account-group" title="Customers" />
@@ -91,7 +105,11 @@ async function logout() {
           </v-list-item>
 
           <v-list-subheader>Admin</v-list-subheader>
-          <v-list-item to="/agents" prepend-icon="mdi-server-network" title="Agents" />
+          <v-list-item to="/agents" prepend-icon="mdi-server-network" title="Agents">
+            <template v-if="pendingAgents > 0" #append>
+              <v-chip size="x-small" color="warning" variant="tonal">{{ pendingAgents }}</v-chip>
+            </template>
+          </v-list-item>
           <v-list-item
             v-if="authStore.user?.isAdministrator"
             to="/users"

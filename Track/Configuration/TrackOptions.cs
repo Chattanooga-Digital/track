@@ -58,6 +58,24 @@ public class S3SourceOptions
     public string Region { get; set; } = "us-east-1";
 }
 
+public class BackupOptions
+{
+    /// <summary>The key every repository password is derived from. Prefer <see cref="MasterKeyFile"/> (a Swarm secret).</summary>
+    public string? MasterKey { get; set; }
+
+    public string MasterKeyFile { get; set; } = "/run/secrets/track_backup_master_key";
+
+    public string ResticPath { get; set; } = "restic";
+
+    /// <summary>Image for the agent's restic helper containers. Defaults to the agent's own image, which carries restic.</summary>
+    public string? HelperImage { get; set; }
+
+    /// <summary>Network for helper containers; null uses the engine's default bridge.</summary>
+    public string? HelperNetwork { get; set; }
+
+    public string CacheVolume { get; set; } = "track-restic-cache";
+}
+
 public class TrackOptions
 {
     public const string Section = "Track";
@@ -88,6 +106,11 @@ public class TrackOptions
 
     /// <summary>Central-side ingest secret (Central mode only).</summary>
     public IngestOptions Ingest { get; set; } = new();
+
+    /// <summary>Where an agent keeps the token that identifies it to the central. Mount a volume here so it survives restarts.</summary>
+    public string AgentTokenPath { get; set; } = "/app/data/agent-token";
+
+    public BackupOptions Backups { get; set; } = new();
 
     /// <summary>
     /// Agent-side bootstrap for the ordered env-var identity list used to group label-less standalone

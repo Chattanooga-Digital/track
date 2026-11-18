@@ -21,28 +21,30 @@ public class BillingCostCalculatorTests
     [Test]
     public void ForScope_ZeroRates_ProduceZeroCost()
     {
-        var costs = BillingCostCalculator.ForScope(50, baseRate: 0m, diskBytes: 5_000_000_000, objectStorageBytes: 9_000_000_000, new BillingRate());
+        var costs = BillingCostCalculator.ForScope(50, baseRate: 0m, diskBytes: 5_000_000_000, objectStorageBytes: 9_000_000_000, backupStorageBytes: 4_000_000_000, new BillingRate());
         Assert.That(costs.TotalCost, Is.EqualTo(0m));
     }
 
     [Test]
     public void ForScope_ComputesEachLineItem()
     {
-        var rate = new BillingRate { DiskRatePerGbMonth = 0.05m, ObjectStorageRatePerGbMonth = 0.02m };
+        var rate = new BillingRate { DiskRatePerGbMonth = 0.05m, ObjectStorageRatePerGbMonth = 0.02m, BackupStorageRatePerGbMonth = 0.01m };
         var costs = BillingCostCalculator.ForScope(
-            blendedPercent: 10, baseRate: 40m, diskBytes: 2_000_000_000, objectStorageBytes: 1_000_000_000, rate);
+            blendedPercent: 10, baseRate: 40m, diskBytes: 2_000_000_000, objectStorageBytes: 1_000_000_000,
+            backupStorageBytes: 3_000_000_000, rate);
 
         Assert.That(costs.ComputeCost, Is.EqualTo(400m));       // 40 x 10
         Assert.That(costs.DiskCost, Is.EqualTo(0.10m));          // 2 GB x 0.05
         Assert.That(costs.ObjectStorageCost, Is.EqualTo(0.02m)); // 1 GB x 0.02
-        Assert.That(costs.TotalCost, Is.EqualTo(400.12m));
+        Assert.That(costs.BackupStorageCost, Is.EqualTo(0.03m)); // 3 GB x 0.01
+        Assert.That(costs.TotalCost, Is.EqualTo(400.15m));
     }
 
     [Test]
     public void ForScope_GbBoundary_IsOneBillionBytes()
     {
         var rate = new BillingRate { DiskRatePerGbMonth = 1m };
-        var costs = BillingCostCalculator.ForScope(0, 0m, diskBytes: 1_000_000_000, objectStorageBytes: 0, rate);
+        var costs = BillingCostCalculator.ForScope(0, 0m, diskBytes: 1_000_000_000, objectStorageBytes: 0, backupStorageBytes: 0, rate);
         Assert.That(costs.DiskCost, Is.EqualTo(1m));
     }
 
@@ -52,8 +54,8 @@ public class BillingCostCalculatorTests
         // Two customers at 10 and 30 blended: base rate = 1000 / 40 = 25/point.
         var total = 10 + 30;
         var baseRate = BillingCostCalculator.ComputeBaseRate(1000m, total);
-        var a = BillingCostCalculator.ForScope(10, baseRate, 0, 0, new BillingRate()).ComputeCost;
-        var b = BillingCostCalculator.ForScope(30, baseRate, 0, 0, new BillingRate()).ComputeCost;
+        var a = BillingCostCalculator.ForScope(10, baseRate, 0, 0, 0, new BillingRate()).ComputeCost;
+        var b = BillingCostCalculator.ForScope(30, baseRate, 0, 0, 0, new BillingRate()).ComputeCost;
 
         Assert.That(a, Is.EqualTo(250m));
         Assert.That(b, Is.EqualTo(750m));

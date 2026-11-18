@@ -3,15 +3,22 @@ using Track.Data.Models;
 using Track.Services;
 using Track.Services.Billing;
 using Track.Website.Api.v0.Models.Stats;
+using Track.Website.Services.Backups;
 using Microsoft.EntityFrameworkCore;
 
 namespace Track.Website.Queries;
 
 /// <summary>Joins the latest poll results with customer/stack assignments into the grouped snapshot.</summary>
-public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder currentStateHolder)
+public class SnapshotBuilder(
+    TrackContext metricsContext,
+    CurrentStateHolder currentStateHolder,
+    AgentEnrollmentRegistry enrollment,
+    BackupRuntimeState backupRuntime)
 {
     private readonly TrackContext _metricsContext = metricsContext;
     private readonly CurrentStateHolder _currentStateHolder = currentStateHolder;
+    private readonly AgentEnrollmentRegistry _enrollment = enrollment;
+    private readonly BackupRuntimeState _backupRuntime = backupRuntime;
 
     public async Task<SnapshotModel> BuildAsync(CancellationToken cancellationToken = default)
     {
@@ -84,9 +91,11 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
             .ThenBy(s => s.StackName)
             .ToList();
 
+        var enrollments = _enrollment.States();
         var snapshot = new SnapshotModel
         {
             Timestamp = DateTime.UtcNow,
+            BackupsNeedingAttention = _backupRuntime.NeedsAttention,
             Cluster = new ClusterCapacityModel
             {
                 NodeCount = state.ClusterCapacity.NodeCount,
@@ -105,6 +114,9 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
                         Error = n.Error,
                         LastSeen = n.LastSeen,
                         AgentVersion = n.AgentVersion,
+                        Role = n.Role,
+                        Approval = enrollments.GetValueOrDefault(n.Name)?.Approval,
+                        TokenChanged = enrollments.GetValueOrDefault(n.Name)?.TokenChanged ?? false,
                         ContainersTracked = nodeSamples.Count,
                         UnidentifiedContainers = nodeSamples.Count(s => s.StackName is null),
                         CpuCores = capacity?.CpuCores ?? 0,
@@ -152,9 +164,15 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
             });
         }
 
-        if (shared.Stacks.Count > 0 || shared.Buckets.Count > 0)
+        var backupBytes = await _metricsContext.BackupRepositories.AsNoTracking()
+            .Where(r => r.SizeBytes != null)
+            .ToDictionaryAsync(r => r.Key, r => r.SizeBytes!.Value, cancellationToken);
+        var sharedBackupBytes = backupBytes.GetValueOrDefault(BackupRepository.SharedKey);
+        var unassignedBackupBytes = backupBytes.GetValueOrDefault(BackupRepository.UnassignedKey);
+
+        if (shared.Stacks.Count > 0 || shared.Buckets.Count > 0 || sharedBackupBytes > 0)
             snapshot.Customers.Add(shared);
-        if (unassigned.Stacks.Count > 0 || unassigned.Buckets.Count > 0)
+        if (unassigned.Stacks.Count > 0 || unassigned.Buckets.Count > 0 || unassignedBackupBytes > 0)
             snapshot.Customers.Add(unassigned);
 
         foreach (var group in snapshot.Customers)
@@ -166,6 +184,12 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
                 MemoryLimitBytes = group.Stacks.Sum(s => s.Totals.MemoryLimitBytes),
                 DiskBytes = group.Stacks.Sum(s => s.Totals.DiskBytes),
                 ObjectStorageBytes = group.Buckets.Sum(b => b.SizeBytes),
+                BackupStorageBytes = group switch
+                {
+                    { CustomerId: { } id } => backupBytes.GetValueOrDefault(BackupRepository.CustomerKey(id)),
+                    { IsShared: true } => sharedBackupBytes,
+                    _ => unassignedBackupBytes,
+                },
             };
         }
 
@@ -182,6 +206,7 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
             MemoryLimitBytes = snapshot.Customers.Sum(c => c.Totals.MemoryLimitBytes),
             DiskBytes = snapshot.Customers.Sum(c => c.Totals.DiskBytes),
             ObjectStorageBytes = snapshot.Customers.Sum(c => c.Totals.ObjectStorageBytes),
+            BackupStorageBytes = snapshot.Customers.Sum(c => c.Totals.BackupStorageBytes),
         };
         ApplyClusterShare(snapshot.Totals, state.ClusterCapacity);
 
@@ -219,7 +244,9 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
         snapshot.Totals.ComputeCost = snapshot.Customers.Sum(c => c.Totals.ComputeCost);
         snapshot.Totals.DiskCost = snapshot.Customers.Sum(c => c.Totals.DiskCost);
         snapshot.Totals.ObjectStorageCost = snapshot.Customers.Sum(c => c.Totals.ObjectStorageCost);
-        snapshot.Totals.TotalCost = snapshot.Totals.ComputeCost + snapshot.Totals.DiskCost + snapshot.Totals.ObjectStorageCost;
+        snapshot.Totals.BackupStorageCost = snapshot.Customers.Sum(c => c.Totals.BackupStorageCost);
+        snapshot.Totals.TotalCost = snapshot.Totals.ComputeCost + snapshot.Totals.DiskCost + snapshot.Totals.ObjectStorageCost
+            + snapshot.Totals.BackupStorageCost;
     }
 
     private static void ApplyCost(UsageTotalsModel totals, decimal baseRate, bool assigned, BillingRate rate)
@@ -229,10 +256,12 @@ public class SnapshotBuilder(TrackContext metricsContext, CurrentStateHolder cur
             baseRate,
             assigned ? totals.DiskBytes : 0,
             assigned ? totals.ObjectStorageBytes : 0,
+            assigned ? totals.BackupStorageBytes : 0,
             rate);
         totals.ComputeCost = costs.ComputeCost;
         totals.DiskCost = costs.DiskCost;
         totals.ObjectStorageCost = costs.ObjectStorageCost;
+        totals.BackupStorageCost = costs.BackupStorageCost;
         totals.TotalCost = costs.TotalCost;
     }
 

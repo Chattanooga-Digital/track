@@ -2,6 +2,7 @@ using Track.Configuration;
 using Track.Services.Docker;
 using Track.Services.Ingest;
 using Track.Website.Services;
+using Track.Website.Services.Backups;
 using Microsoft.Extensions.Options;
 
 namespace Track.Website.HostedServices;
@@ -17,7 +18,8 @@ public sealed class StatsPushHostedService(
     AgentNodeNameResolver nodeNameResolver,
     IdentityEnvVarProvider identityEnvVars,
     CentralClient centralClient,
-    AgentSelfUpdater selfUpdater) : BackgroundService
+    AgentSelfUpdater selfUpdater,
+    BackupJobRunner backupJobRunner) : BackgroundService
 {
     private readonly ILogger<StatsPushHostedService> _logger = logger;
     private readonly IOptions<TrackOptions> _options = options;
@@ -26,6 +28,7 @@ public sealed class StatsPushHostedService(
     private readonly IdentityEnvVarProvider _identityEnvVars = identityEnvVars;
     private readonly CentralClient _centralClient = centralClient;
     private readonly AgentSelfUpdater _selfUpdater = selfUpdater;
+    private readonly BackupJobRunner _backupJobRunner = backupJobRunner;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -61,7 +64,8 @@ public sealed class StatsPushHostedService(
 
         var collection = await _statsCollector.CollectAsync(node, timestamp, cancellationToken);
         var report = new StatsReport(
-            node.Name, timestamp, collection.Capacity, collection.Samples, collection.Inventory, AppVersion.Build);
+            node.Name, timestamp, collection.Capacity, collection.Samples, collection.Inventory, AppVersion.Build,
+            collection.Role, collection.Mounts);
 
         var response = await _centralClient.PostStatsAsync(report, cancellationToken);
 
@@ -70,6 +74,7 @@ public sealed class StatsPushHostedService(
 
         // Apply the central's authoritative identity env-var list so grouping is driven from the UI.
         _identityEnvVars.Update(response.IdentityEnvVars);
+        _backupJobRunner.Accept(response.BackupJobIds ?? [], cancellationToken);
         await _selfUpdater.UpdateIfBehindAsync(response.Version, cancellationToken);
     }
 }

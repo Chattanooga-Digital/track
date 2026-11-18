@@ -12,6 +12,9 @@ public class SnapshotModel
     public List<NodeStatusModel> Nodes { get; set; } = [];
     public List<CustomerGroupModel> Customers { get; set; } = [];
 
+    /// <summary>Backup volumes that are failing, stale, or otherwise need a look.</summary>
+    public int BackupsNeedingAttention { get; set; }
+
     /// <summary>Billing currency (ISO code) for the cost figures on the usage totals.</summary>
     public string Currency { get; set; } = "USD";
 }
