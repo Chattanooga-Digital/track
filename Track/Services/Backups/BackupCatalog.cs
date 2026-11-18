@@ -42,13 +42,14 @@ public sealed record CatalogVolume(
     List<AgentHook> RestorePostHooks,
     bool Running,
     bool Global,
-    List<string> Copies)
+    List<string> Copies,
+    bool HoldsDatabase)
 {
     public bool Excluded => ExcludedBy is not null;
 
     public bool Protected => !Excluded && Kind is CatalogVolumeKind.Single or CatalogVolumeKind.PerNode;
 
-    public bool DatabaseWithoutHook => PreHooks.Count == 0 && Images.Any(DatabaseImages.IsDatabase);
+    public bool DatabaseWithoutHook => PreHooks.Count == 0 && HoldsDatabase;
 }
 
 public sealed record CatalogInputs(
@@ -155,7 +156,7 @@ public static partial class BackupCatalog
         if (kind == CatalogVolumeKind.StaleCopy)
         {
             return new CatalogVolume(key, name, node, kind, stack, [], [], volume?.SizeBytes, null, null,
-                [], [], [], [], [], false, global, copies);
+                [], [], [], [], [], false, global, copies, false);
         }
 
         ExclusionSource? excludedBy = null;
@@ -189,8 +190,14 @@ public static partial class BackupCatalog
             Hooks(BackupLabels.RestorePostHook),
             nodeMounts.Count > 0,
             global,
-            copies);
+            copies,
+            HoldsDatabase(nodeMounts, services));
     }
+
+    // Swarm services and older agents don't report where a volume is mounted, so any database use counts there.
+    private static bool HoldsDatabase(List<VolumeMount> mounts, List<SwarmServiceInfo> services) => mounts.Count > 0
+        ? mounts.Any(m => DatabaseImages.IsDatabase(m.Image) && (m.Destination is null || DatabaseImages.IsDataPath(m.Destination)))
+        : services.Any(s => DatabaseImages.IsDatabase(s.Image));
 
     private static void Merge(Dictionary<string, Dictionary<string, string>> labelsByService, string service, Dictionary<string, string> labels)
     {

@@ -183,8 +183,8 @@ const canSavePassword = () =>
               {{ user.username }}
               <v-chip v-if="isSelf(user)" size="x-small" variant="tonal" class="ml-1">You</v-chip>
             </td>
-            <td class="text-medium-emphasis">{{ user.displayName ?? '—' }}</td>
-            <td class="text-medium-emphasis">{{ user.email ?? '—' }}</td>
+            <td class="text-medium-emphasis">{{ user.displayName ?? '' }}</td>
+            <td class="text-medium-emphasis">{{ user.email ?? '' }}</td>
             <td>
               <v-chip v-if="user.isAdministrator" size="x-small" color="primary" variant="tonal">
                 Administrator

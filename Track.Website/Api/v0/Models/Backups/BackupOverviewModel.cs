@@ -5,6 +5,9 @@ public class BackupOverviewModel
     public bool TargetSet { get; set; }
     public bool MasterKeySet { get; set; }
     public bool Paused { get; set; }
+    public int Included { get; set; }
+
+    /// <summary>Included volumes with a good backup inside the stale window.</summary>
     public int Protected { get; set; }
     public int NeedsAttention { get; set; }
     public int Excluded { get; set; }

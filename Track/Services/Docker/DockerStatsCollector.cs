@@ -98,7 +98,8 @@ public sealed class DockerStatsCollector(
                     DockerLabels.GetStackName(c.Labels),
                     DockerLabels.GetServiceName(c.Labels),
                     c.Image,
-                    BackupLabels.Select(c.Labels))))
+                    BackupLabels.Select(c.Labels),
+                    m.Destination)))
             .ToList();
 
     private static async Task<ContainerStatsResponse?> GetStatsOnceAsync(

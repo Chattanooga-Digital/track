@@ -55,6 +55,7 @@ builder.Services
     .Services
     .AddOpenApi()
     .AddSignalR()
+    .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
     .Services
     // AddTrack wires up Identity (AddIdentity + cookie configuration); see Track/DependencyInjection.
     .AddTrack(builder.Configuration)

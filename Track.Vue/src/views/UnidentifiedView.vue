@@ -134,7 +134,7 @@ onMounted(refresh)
             <td class="text-medium-emphasis">{{ c.nodeName }}</td>
             <td class="text-truncate" style="max-width: 200px">{{ c.containerName }}</td>
             <td class="text-medium-emphasis text-truncate" style="max-width: 220px">
-              {{ c.image ?? '—' }}
+              {{ c.image ?? '' }}
             </td>
             <td>
               <div class="d-flex flex-wrap ga-1 py-1">

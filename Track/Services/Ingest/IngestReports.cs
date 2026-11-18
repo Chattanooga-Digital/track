@@ -26,7 +26,8 @@ public record VolumeMount(
     string? StackName,
     string? ServiceName,
     string? Image,
-    Dictionary<string, string> BackupLabels);
+    Dictionary<string, string> BackupLabels,
+    string? Destination = null);
 
 /// <summary>A manager agent's view of the swarm: what only a manager's engine can answer.</summary>
 public record SwarmReport(string NodeName, DateTime Timestamp, List<SwarmNodeInfo> Nodes, List<SwarmServiceInfo> Services);

@@ -9,7 +9,7 @@ public class ReplaceGuardTests
 {
     private static CatalogVolume Volume(string node = "mgr-01", CatalogVolumeKind kind = CatalogVolumeKind.Single) =>
         new("app_db", "app_db", node, kind, "app", ["app_db"], ["postgres:17"], 1, null, null,
-            [], [], [], [], [], true, false, [node]);
+            [], [], [], [], [], true, false, [node], true);
 
     private static SwarmReport Swarm(List<string> constraints, bool global = false) => new("mgr-01", DateTime.UtcNow,
         [

@@ -174,7 +174,7 @@ const onlineCount = computed(() => nodes.value.filter((n) => n.online).length)
               </span>
               <span v-else class="text-medium-emphasis">0</span>
             </td>
-            <td class="text-right">{{ node.cpuCores || '—' }}</td>
+            <td class="text-right">{{ node.cpuCores || '' }}</td>
             <td class="text-right">
               {{ formatCpu(node.cpuPercent) }}
               <span v-if="node.cpuCores > 0" class="text-caption text-medium-emphasis">

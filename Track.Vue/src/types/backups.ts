@@ -68,6 +68,7 @@ export interface BackupOverviewDto {
   targetSet: boolean
   masterKeySet: boolean
   paused: boolean
+  included: number
   protected: number
   needsAttention: number
   excluded: number

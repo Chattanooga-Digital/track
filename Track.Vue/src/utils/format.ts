@@ -1,7 +1,7 @@
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
 
 export function formatBytes(bytes: number | null | undefined): string {
-  if (bytes === null || bytes === undefined) return '—'
+  if (bytes === null || bytes === undefined) return ''
   if (bytes === 0) return '0 B'
 
   const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), UNITS.length - 1)
@@ -10,7 +10,7 @@ export function formatBytes(bytes: number | null | undefined): string {
 }
 
 export function formatCpu(percent: number | null | undefined): string {
-  if (percent === null || percent === undefined) return '—'
+  if (percent === null || percent === undefined) return ''
   return `${percent.toFixed(1)}%`
 }
 
@@ -20,7 +20,7 @@ export function memoryPercent(used: number, limit: number): number {
 }
 
 export function formatMoney(amount: number | null | undefined, currency = 'USD'): string {
-  if (amount === null || amount === undefined) return '—'
+  if (amount === null || amount === undefined) return ''
   try {
     return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount)
   } catch {

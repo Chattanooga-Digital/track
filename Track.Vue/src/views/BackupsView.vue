@@ -41,7 +41,30 @@ watch(backupsVersion, load)
 
 const needsAttention = (v: BackupVolumeDto) =>
   v.databaseWithoutHook ||
-  ['Stale', 'Failed', 'Never', 'StaleCopy', 'Ambiguous', 'NodeOffline'].includes(v.status)
+  ['Stale', 'Failed', 'StaleCopy', 'Ambiguous', 'NodeOffline'].includes(v.status)
+
+const multipleNodes = computed(
+  () =>
+    new Set(
+      (overview.value?.groups ?? []).flatMap((g) =>
+        g.volumes.flatMap((v) => (v.nodeName ? [v.nodeName] : v.copies)),
+      ),
+    ).size > 1,
+)
+
+const anonymousVolume = /^[0-9a-f]{64}$/
+
+const displayName = (v: BackupVolumeDto) =>
+  anonymousVolume.test(v.volumeName) ? v.volumeName.slice(0, 12) : v.volumeName
+
+function detail(v: BackupVolumeDto) {
+  const parts: string[] = []
+  if (multipleNodes.value) parts.push(v.nodeName ?? v.copies.join(', '))
+  if (v.status === 'StaleCopy') parts.push('Not in use')
+  else if (v.services.length) parts.push(v.services.join(', '))
+  if (v.paths.length) parts.push(`Only ${v.paths.join(', ')}`)
+  return parts.join(' · ')
+}
 
 const groups = computed<BackupGroupDto[]>(() =>
   (overview.value?.groups ?? [])
@@ -80,39 +103,38 @@ const backUpEverything = () => run('all', backUpAll, 'Backups queued.')
 const isProtected = (v: BackupVolumeDto) =>
   !['Excluded', 'StaleCopy', 'Ambiguous'].includes(v.status)
 
-interface StatusChip {
+interface LastBackup {
   text: string
-  color?: string
-  variant?: 'tonal' | 'outlined'
+  chip?: string
+  muted?: boolean
 }
 
-function statusChip(v: BackupVolumeDto): StatusChip {
+function lastBackup(v: BackupVolumeDto): LastBackup {
+  const when = relativeTime(v.lastGoodAt)
   switch (v.status) {
     case 'Ok':
-      return { text: 'OK', color: 'success' }
+      return { text: when }
     case 'Queued':
-      return { text: 'Queued', color: 'info' }
+      return { text: 'Queued', chip: 'info' }
     case 'Running': {
-      const verb = v.activeJobKind === 'Backup' ? 'Running' : 'Restoring'
-      return {
-        text: v.percentDone != null ? `${verb} ${Math.round(v.percentDone * 100)}%` : verb,
-        color: 'info',
-      }
+      const verb = v.activeJobKind === 'Backup' ? 'Backing up' : 'Restoring'
+      const percent = v.percentDone != null ? ` ${Math.round(v.percentDone * 100)}%` : ''
+      return { text: `${verb}${percent}`, chip: 'info' }
     }
     case 'Stale':
-      return { text: 'Stale', color: 'warning' }
+      return { text: when, chip: 'warning' }
     case 'Failed':
-      return { text: 'Failed', color: 'error' }
+      return { text: 'Failed', chip: 'error' }
     case 'Never':
-      return { text: 'Not backed up yet', color: 'warning' }
+      return { text: 'Not yet', muted: true }
     case 'Excluded':
-      return { text: v.excludedBy === 'Track' ? 'Excluded · Track' : 'Excluded · label' }
+      return { text: v.excludedBy === 'Track' ? 'Excluded' : 'Excluded by label', muted: true }
     case 'StaleCopy':
-      return { text: 'Stale copy', color: 'warning', variant: 'outlined' }
+      return { text: 'Stale copy', muted: true }
     case 'Ambiguous':
-      return { text: 'Several copies', color: 'warning' }
+      return { text: 'Several copies', chip: 'warning' }
     case 'NodeOffline':
-      return { text: 'Node offline', color: 'error' }
+      return { text: 'Node offline', chip: 'error' }
   }
   return { text: v.status }
 }
@@ -163,7 +185,10 @@ function statusChip(v: BackupVolumeDto): StatusChip {
     <div class="tiles mb-4">
       <v-card variant="flat" border class="pa-4">
         <div class="text-caption text-medium-emphasis">Protected</div>
-        <div class="text-h5">{{ overview?.protected ?? '' }}</div>
+        <div class="text-h5">
+          {{ overview?.protected ?? ''
+          }}<span v-if="overview" class="text-medium-emphasis"> / {{ overview.included }}</span>
+        </div>
       </v-card>
       <v-card variant="flat" border class="pa-4">
         <div class="text-caption text-medium-emphasis">Needs attention</div>
@@ -202,26 +227,23 @@ function statusChip(v: BackupVolumeDto): StatusChip {
       <v-progress-linear v-if="loading" indeterminate />
       <v-card variant="outlined">
         <div class="table-scroll">
-          <v-table density="comfortable">
+          <v-table density="comfortable" class="volumes">
             <thead>
               <tr>
                 <th>Volume</th>
-                <th>Node</th>
                 <th class="text-right">Size</th>
-                <th>Method</th>
-                <th>Last good</th>
-                <th>Status</th>
+                <th class="text-no-wrap">Last backup</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               <template v-for="g in groups" :key="g.repositoryKey">
                 <tr class="group-row">
-                  <td colspan="7">
+                  <td colspan="4">
                     <span class="font-weight-medium">{{ groupName(g) }}</span>
-                    <v-chip size="x-small" variant="tonal" class="ml-2">{{
-                      g.customerId !== null ? 'Billed' : 'Not billed'
-                    }}</v-chip>
+                    <span class="text-caption text-medium-emphasis ml-2">{{
+                      g.volumes.length
+                    }}</span>
                     <span
                       v-if="g.repositorySizeBytes !== null"
                       class="text-caption text-medium-emphasis ml-3"
@@ -234,83 +256,57 @@ function statusChip(v: BackupVolumeDto): StatusChip {
                   :key="v.key"
                   :class="{ 'text-medium-emphasis': !isProtected(v) }"
                 >
-                  <td>
-                    <div class="font-weight-medium">{{ v.volumeName }}</div>
-                    <div class="text-caption text-medium-emphasis">
-                      {{ v.services.join(', ') || (v.status === 'StaleCopy' ? 'Not in use' : '') }}
-                    </div>
-                  </td>
-                  <td>{{ v.nodeName ?? v.copies.join(', ') }}</td>
-                  <td class="text-right">{{ formatBytes(v.sizeBytes) }}</td>
-                  <td>
-                    <template v-if="isProtected(v)">
+                  <td class="volume-cell">
+                    <div class="d-flex align-center ga-2">
+                      <span class="font-weight-medium text-truncate" :title="v.volumeName">{{
+                        displayName(v)
+                      }}</span>
                       <v-chip
                         v-if="v.databaseWithoutHook"
-                        size="small"
+                        size="x-small"
                         color="warning"
                         variant="tonal"
                         prepend-icon="mdi-alert"
-                        >Database, no hook</v-chip
+                        class="flex-shrink-0"
+                        >No dump hook</v-chip
                       >
-                      <v-chip v-else size="small" variant="tonal">{{
-                        v.hasHooks ? 'Hook' : 'Files'
-                      }}</v-chip>
-                      <div v-if="v.paths.length" class="text-caption text-medium-emphasis">
-                        Only {{ v.paths.join(', ') }}
-                      </div>
-                    </template>
+                      <v-chip
+                        v-if="v.override !== null"
+                        size="x-small"
+                        variant="outlined"
+                        class="flex-shrink-0"
+                        >Override</v-chip
+                      >
+                    </div>
+                    <div
+                      v-if="detail(v)"
+                      class="text-caption text-medium-emphasis text-truncate"
+                      :title="detail(v)"
+                    >
+                      {{ detail(v) }}
+                    </div>
+                    <div
+                      v-if="v.status === 'Failed' && v.lastError"
+                      class="text-caption text-error text-truncate"
+                      :title="v.lastError"
+                    >
+                      {{ v.lastError }}
+                    </div>
                   </td>
-                  <td>
-                    <span v-if="isProtected(v)" :title="absoluteTime(v.lastGoodAt)">{{
-                      relativeTime(v.lastGoodAt)
+                  <td class="text-right text-no-wrap">{{ formatBytes(v.sizeBytes) }}</td>
+                  <td class="text-no-wrap" :title="absoluteTime(v.lastGoodAt)">
+                    <v-chip
+                      v-if="lastBackup(v).chip"
+                      size="small"
+                      :color="lastBackup(v).chip"
+                      variant="tonal"
+                      >{{ lastBackup(v).text }}</v-chip
+                    >
+                    <span v-else :class="{ 'text-medium-emphasis': lastBackup(v).muted }">{{
+                      lastBackup(v).text
                     }}</span>
                   </td>
-                  <td>
-                    <v-chip
-                      size="small"
-                      :color="statusChip(v).color"
-                      :variant="statusChip(v).variant ?? 'tonal'"
-                      >{{ statusChip(v).text }}</v-chip
-                    >
-                    <v-progress-linear
-                      v-if="v.status === 'Running' && v.percentDone != null"
-                      :model-value="v.percentDone * 100"
-                      color="primary"
-                      height="3"
-                      rounded
-                      class="mt-1 progress"
-                    />
-                    <div v-if="v.lastError" class="text-caption text-error">{{ v.lastError }}</div>
-                  </td>
-                  <td class="text-right text-no-wrap">
-                    <template v-if="isProtected(v)">
-                      <v-btn
-                        v-if="v.activeJobId"
-                        icon="mdi-close"
-                        size="small"
-                        variant="text"
-                        title="Cancel"
-                        :loading="busyKey === v.key"
-                        @click="cancel(v)"
-                      />
-                      <v-btn
-                        v-else
-                        icon="mdi-play"
-                        size="small"
-                        variant="text"
-                        title="Back up now"
-                        :disabled="!configured"
-                        :loading="busyKey === v.key"
-                        @click="backUp(v)"
-                      />
-                      <v-btn
-                        icon="mdi-backup-restore"
-                        size="small"
-                        variant="text"
-                        title="Restore"
-                        @click="restoreVolume = v"
-                      />
-                    </template>
+                  <td class="text-right actions-cell">
                     <v-menu v-if="v.status !== 'StaleCopy'">
                       <template #activator="{ props }">
                         <v-btn
@@ -318,9 +314,24 @@ function statusChip(v: BackupVolumeDto): StatusChip {
                           icon="mdi-dots-vertical"
                           size="small"
                           variant="text"
+                          :loading="busyKey === v.key"
                         />
                       </template>
                       <v-list density="compact">
+                        <template v-if="isProtected(v)">
+                          <v-list-item
+                            v-if="v.activeJobId"
+                            title="Cancel backup"
+                            @click="cancel(v)"
+                          />
+                          <v-list-item
+                            v-else
+                            title="Back up now"
+                            :disabled="!configured"
+                            @click="backUp(v)"
+                          />
+                        </template>
+                        <v-list-item title="Restore" @click="restoreVolume = v" />
                         <v-list-item
                           v-if="v.status !== 'Excluded'"
                           title="Exclude"
@@ -332,21 +343,13 @@ function statusChip(v: BackupVolumeDto): StatusChip {
                           title="Follow stack labels"
                           @click="setOverride(v, null)"
                         />
-                        <v-list-item title="History" @click="restoreVolume = v" />
                       </v-list>
                     </v-menu>
-                    <v-chip
-                      v-if="v.override !== null"
-                      size="x-small"
-                      variant="outlined"
-                      class="ml-1"
-                      >Override</v-chip
-                    >
                   </td>
                 </tr>
               </template>
               <tr v-if="!loading && groups.length === 0">
-                <td colspan="7" class="text-center text-medium-emphasis py-6">
+                <td colspan="4" class="text-center text-medium-emphasis py-6">
                   {{ attentionOnly ? 'Nothing needs attention.' : 'No volumes yet.' }}
                 </td>
               </tr>
@@ -383,7 +386,16 @@ function statusChip(v: BackupVolumeDto): StatusChip {
   background: rgba(var(--v-theme-on-surface), 0.04);
 }
 
-.progress {
-  max-width: 120px;
+.volumes {
+  min-width: 560px;
+}
+
+.volume-cell {
+  width: 100%;
+  max-width: 0;
+}
+
+.actions-cell {
+  width: 48px;
 }
 </style>

@@ -14,6 +14,12 @@ improvements, bug fixes, and new features by version.
  - Agents must be approved on the Agents page before they run backups, and each node's role is shown
  - Billing shows each customer's backup storage, with its own per-GB rate
 
+#### Bug Fixes
+ - The Agents page no longer switches role and backup approval to numbers after the first live update
+ - The Backups page fits on screen with one menu per volume, Protected counts only volumes with a recent backup, and volumes not backed up yet no longer need attention
+ - The no dump hook warning only flags volumes a database keeps its data in, not its init scripts
+ - Empty values show blank instead of a dash
+
 ### 0.9.1 - 2026-11-03
 #### Features
  - Agents run outside the swarm update themselves to the central's version

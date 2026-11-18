@@ -24,7 +24,7 @@ public sealed record BackupVolumeState(
     string? ReplaceBlockedReason)
 {
     public bool NeedsAttention =>
-        Status is BackupVolumeStatus.Stale or BackupVolumeStatus.Failed or BackupVolumeStatus.Never
+        Status is BackupVolumeStatus.Stale or BackupVolumeStatus.Failed
             or BackupVolumeStatus.StaleCopy or BackupVolumeStatus.Ambiguous or BackupVolumeStatus.NodeOffline
         || (Volume.Protected && Volume.DatabaseWithoutHook);
 }

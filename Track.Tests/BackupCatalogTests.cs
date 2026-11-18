@@ -38,6 +38,24 @@ public class BackupCatalogTests
     }
 
     [Test]
+    public void Build_FlagsOnlyADatabasesDataDirectory()
+    {
+        var catalog = Build(
+            new() { ["node-1"] = [new NodeVolume("app_db", "app", 1), new NodeVolume("app_dbinit", "app", 1)] },
+            new()
+            {
+                ["node-1"] =
+                [
+                    Mount("app_db", "app_db", "mariadb:11") with { Destination = "/var/lib/mysql" },
+                    Mount("app_dbinit", "app_db", "mariadb:11") with { Destination = "/docker-entrypoint-initdb.d" },
+                ],
+            });
+
+        Assert.That(catalog.Single(v => v.VolumeName == "app_db").DatabaseWithoutHook, Is.True);
+        Assert.That(catalog.Single(v => v.VolumeName == "app_dbinit").DatabaseWithoutHook, Is.False);
+    }
+
+    [Test]
     public void Build_TreatsAGlobalServicesVolumeAsOnePerNode()
     {
         var swarm = new SwarmReport("node-1", DateTime.UtcNow, [], [
