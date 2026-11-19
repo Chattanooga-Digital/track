@@ -6,12 +6,14 @@ export interface UserDto {
   isAdministrator: boolean
   disabled: boolean
   lockedOut: boolean
+  hasPassword: boolean
   createdAt: string
 }
 
 export interface UserCreateDto {
   username: string
-  password: string
+  password: string | null
+  sendPasswordEmail: boolean
   email: string | null
   displayName: string | null
   isAdministrator: boolean

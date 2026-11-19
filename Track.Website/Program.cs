@@ -80,6 +80,7 @@ builder.Services
     .AddScoped<SnapshotBuilder>()
     .AddScoped<S3UsageRefresher>()
     .AddScoped<BillingSampleRecorder>()
+    .AddScoped<AccountEmails>()
     .AddSingleton<AgentEnrollmentRegistry>()
     .AddSingleton<BackupRuntimeState>()
     .AddSingleton<BackupNotifier>()
@@ -98,7 +99,8 @@ builder.Services
     .AddHostedService<S3UsageHostedService>()
     .AddHostedService<BillingSampleHostedService>()
     .AddHostedService<BackupSchedulerHostedService>()
-    .AddHostedService<BackupMaintenanceHostedService>();
+    .AddHostedService<BackupMaintenanceHostedService>()
+    .AddHostedService<EmailDeliveryHostedService>();
 
 var app = builder.Build();
 

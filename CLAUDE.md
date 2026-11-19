@@ -107,6 +107,13 @@ and `Role : IdentityRole<Guid>` (`Track/Data/Models/`), and `TrackContext` deriv
   survive restarts.
 - The Vue side gates on `stores/authStore.ts`: `App.vue` calls `initialize()` once, shows
   `LoginView` until authenticated, and only then starts the live snapshot feed.
+- **Password links.** `AccountEmails` emails an Identity password-reset token as
+  `<Site URL>/set-password?user=&token=`: a `SetPassword` invitation while the user has no password, a
+  `PasswordReset` after. Admins send one when creating a user (no password needed) or from the Users list;
+  anyone can ask from the login page (`POST /auth/forgot`, by username or email, same answer either way, one
+  link per address per 5 minutes). `POST /auth/set-password` uses the token, clears any lockout and signs the
+  user in; `App.vue` shows `SetPasswordView` instead of the login on that route. Links use the configured Site
+  URL, never the request's Host header. Users without an email have a null `Email`, not a placeholder.
 
 ## Blended Cluster Utilization (Billing)
 
@@ -332,6 +339,23 @@ through the central.
   categories at Information and above reach a session. Requests never wait on the scheduler: they call
   `BackupRuntimeState.WakeScheduler()`, and repository setup gives up after 2 minutes.
 - The Backups page reloads on the hub's `backups` event (`snapshotStore.backupsVersion`).
+
+## Email
+
+Central only. The SMTP server is one `MailSettings` row (none means mail is off), edited by administrators on the
+**Settings** page (`EmailSettingsController`, `/api/v0/settings/email`), along with the Site URL emailed links
+point at. The password is encrypted with Data
+Protection (`MailSecretProtector`) and never returned. `POST /settings/email/test` sends the `Test` email using the
+form's unsaved values, falling back to the stored password when the field is blank.
+
+- **Templates** follow Procyon: each `EmailKind` member has an embedded `Track/Templates/Email/<Member>.liquid` with
+  the subject in front matter and `{% layout '_layout.liquid' %}` in the body. `EmailRenderer` (Fluid) HTML-encodes
+  every output, so templates must not add `| escape`, then PreMailer inlines the CSS. The model goes through JSON, so
+  templates use camelCase names. A new email is an enum member plus its template; a test renders every kind.
+- **Sending** goes through `EmailQueue.QueueAsync`, which renders at once and stores an `OutboundEmail`, or stores
+  nothing and returns false while mail is off, so enabling it later doesn't send a backlog of stale alerts.
+  `EmailDeliveryHostedService` sends due mail every minute or when woken, retries after 1m, 5m, 30m and 2h, then marks
+  it Failed. A failure ends the pass so one dead server costs one timeout. Rows are deleted after 30 days.
 
 ## Multi-Node / Swarm Configuration
 

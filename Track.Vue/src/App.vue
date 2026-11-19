@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useDisplay } from 'vuetify'
+import { useRoute } from 'vue-router'
 import { useSnapshotStore } from '@/stores/snapshotStore'
 import { useAuthStore } from '@/stores/authStore'
 import LoginView from '@/views/LoginView.vue'
+import SetPasswordView from '@/views/SetPasswordView.vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import { getAbout } from '@/api/aboutApi'
 
 const snapshotStore = useSnapshotStore()
 const authStore = useAuthStore()
+const route = useRoute()
 const { mdAndUp } = useDisplay()
 const changePasswordOpen = ref(false)
 const drawerOpen = ref(false)
@@ -57,7 +60,8 @@ async function logout() {
 
     <template v-else-if="!authStore.isAuthenticated">
       <v-main>
-        <LoginView />
+        <SetPasswordView v-if="route.name === 'set-password'" />
+        <LoginView v-else />
       </v-main>
     </template>
 
@@ -115,6 +119,12 @@ async function logout() {
             to="/users"
             prepend-icon="mdi-account-multiple"
             title="Users"
+          />
+          <v-list-item
+            v-if="authStore.user?.isAdministrator"
+            to="/settings"
+            prepend-icon="mdi-cog"
+            title="Settings"
           />
         </v-list>
 

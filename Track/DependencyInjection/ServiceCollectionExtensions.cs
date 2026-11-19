@@ -3,6 +3,7 @@ using Track.Data;
 using Track.Data.Models;
 using Track.Services;
 using Track.Services.Docker;
+using Track.Services.Mail;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -72,6 +73,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Track.Services.S3.MinioAdminClient>();
         services.AddSingleton<Track.Services.S3.S3UsageCollector>();
         services.AddScoped<Track.Services.S3.S3SourceSecretProtector>();
+        services.AddSingleton<EmailRenderer>();
+        services.AddSingleton<EmailDeliverySignal>();
+        services.AddSingleton<IMailTransport, SmtpMailTransport>();
+        services.AddScoped<MailSecretProtector>();
+        services.AddScoped<EmailQueue>();
+        services.AddScoped<EmailDelivery>();
 
         return services;
     }

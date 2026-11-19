@@ -27,6 +27,8 @@ public class TrackContext(DbContextOptions<TrackContext> options)
     public DbSet<BackupVolumeOverride> BackupVolumeOverrides => Set<BackupVolumeOverride>();
     public DbSet<BackupJob> BackupJobs => Set<BackupJob>();
     public DbSet<BackupSnapshot> BackupSnapshots => Set<BackupSnapshot>();
+    public DbSet<MailSettings> MailSettings => Set<MailSettings>();
+    public DbSet<OutboundEmail> OutboundEmails => Set<OutboundEmail>();
 
     // SQLite keeps no time zone, so values come back Unspecified and serialize without a Z; every stored time is UTC.
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

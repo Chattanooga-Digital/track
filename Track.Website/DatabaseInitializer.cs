@@ -49,7 +49,7 @@ public static class DatabaseInitializer
         var admin = new User
         {
             UserName = options.AdminUsername,
-            Email = options.AdminEmail ?? $"{options.AdminUsername}@localhost",
+            Email = options.AdminEmail,
             EmailConfirmed = true,
             CreatedAt = DateTime.UtcNow,
         };

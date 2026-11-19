@@ -1,5 +1,6 @@
 using Track.Data.Models;
 using Track.Website.Api.v0.Models.Users;
+using Track.Website.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -17,11 +18,13 @@ namespace Track.Website.Api.v0.Controllers;
 public class UsersController(
     ILogger<UsersController> logger,
     UserManager<User> userManager,
-    SignInManager<User> signInManager) : ControllerBase
+    SignInManager<User> signInManager,
+    AccountEmails accountEmails) : ControllerBase
 {
     protected ILogger<UsersController> Logger { get; } = logger;
     protected UserManager<User> UserManager { get; } = userManager;
     protected SignInManager<User> SignInManager { get; } = signInManager;
+    protected AccountEmails AccountEmails { get; } = accountEmails;
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
@@ -41,6 +44,7 @@ public class UsersController(
                 u.DisplayName,
                 u.Disabled,
                 u.LockoutEnd,
+                HasPassword = u.PasswordHash != null,
                 u.CreatedAt,
             })
             .ToListAsync(cancellationToken);
@@ -54,27 +58,43 @@ public class UsersController(
             IsAdministrator = adminIds.Contains(u.Id),
             Disabled = u.Disabled,
             LockedOut = u.LockoutEnd > DateTimeOffset.UtcNow,
+            HasPassword = u.HasPassword,
             CreatedAt = u.CreatedAt,
         }));
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] UserCreateModel model)
+    public async Task<IActionResult> Create([FromBody] UserCreateModel model, CancellationToken cancellationToken)
     {
         var username = model.Username.Trim();
         if (username.Length == 0)
             return BadRequest("Username is required.");
 
+        var email = string.IsNullOrWhiteSpace(model.Email) ? null : model.Email.Trim();
+        if (model.SendPasswordEmail)
+        {
+            if (email is null)
+                return BadRequest("Email is required to send a password link.");
+            if (!await AccountEmails.AvailableAsync(cancellationToken))
+                return BadRequest("Set up email in Settings first.");
+        }
+        else if (string.IsNullOrEmpty(model.Password))
+        {
+            return BadRequest("Password is required.");
+        }
+
         var user = new User
         {
             UserName = username,
-            Email = string.IsNullOrWhiteSpace(model.Email) ? $"{username}@localhost" : model.Email.Trim(),
+            Email = email,
             EmailConfirmed = true,
             DisplayName = string.IsNullOrWhiteSpace(model.DisplayName) ? null : model.DisplayName.Trim(),
             CreatedAt = DateTime.UtcNow,
         };
 
-        var result = await UserManager.CreateAsync(user, model.Password);
+        var result = model.SendPasswordEmail
+            ? await UserManager.CreateAsync(user)
+            : await UserManager.CreateAsync(user, model.Password!);
         if (!result.Succeeded)
             return BadRequest(IdentityErrors(result));
 
@@ -82,6 +102,9 @@ public class UsersController(
             await UserManager.AddToRoleAsync(user, Role.Administrator);
 
         Logger.LogInformation("User '{Username}' created by '{Actor}'.", username, User.Identity?.Name);
+
+        if (model.SendPasswordEmail)
+            await AccountEmails.SendPasswordLinkAsync(user, await ActorNameAsync(), cancellationToken);
 
         return Ok(new UserModel
         {
@@ -92,6 +115,7 @@ public class UsersController(
             IsAdministrator = model.IsAdministrator,
             Disabled = false,
             LockedOut = false,
+            HasPassword = !model.SendPasswordEmail,
             CreatedAt = user.CreatedAt,
         });
     }
@@ -155,6 +179,21 @@ public class UsersController(
         return Ok();
     }
 
+    [HttpPost("{id:guid}/password-email")]
+    public async Task<IActionResult> SendPasswordEmail([FromRoute] Guid id, CancellationToken cancellationToken)
+    {
+        var user = await UserManager.FindByIdAsync(id.ToString());
+        if (user is null)
+            return NotFound();
+        if (string.IsNullOrWhiteSpace(user.Email))
+            return BadRequest("This user has no email address.");
+        if (!await AccountEmails.SendPasswordLinkAsync(user, await ActorNameAsync(), cancellationToken))
+            return BadRequest("Set up email in Settings first.");
+
+        Logger.LogInformation("Password link for '{Username}' sent by '{Actor}'.", user.UserName, User.Identity?.Name);
+        return Ok();
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete([FromRoute] Guid id)
     {
@@ -178,6 +217,9 @@ public class UsersController(
     }
 
     private Guid GetCurrentUserId() => Guid.Parse(UserManager.GetUserId(User)!);
+
+    private async Task<string?> ActorNameAsync() =>
+        await UserManager.GetUserAsync(User) is { } actor ? actor.DisplayName ?? actor.UserName : null;
 
     private async Task<int> CountOtherActiveAdminsAsync(User target)
     {

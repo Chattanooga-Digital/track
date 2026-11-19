@@ -19,6 +19,10 @@ export async function setUserPassword(id: string, password: string): Promise<voi
   await http.post(`/users/${id}/password`, { password })
 }
 
+export async function sendPasswordEmail(id: string): Promise<void> {
+  await http.post(`/users/${id}/password-email`)
+}
+
 export async function deleteUser(id: string): Promise<void> {
   await http.delete(`/users/${id}`)
 }

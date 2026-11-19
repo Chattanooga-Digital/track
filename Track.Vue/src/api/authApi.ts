@@ -1,5 +1,27 @@
 import { http } from './http'
-import type { CurrentUserDto, LoginDto } from '@/types/auth'
+import type { AuthOptionsDto, CurrentUserDto, LoginDto } from '@/types/auth'
+
+export async function getAuthOptions(): Promise<AuthOptionsDto> {
+  const { data } = await http.get<AuthOptionsDto>('/auth/options')
+  return data
+}
+
+export async function forgotPassword(login: string): Promise<void> {
+  await http.post('/auth/forgot', { login })
+}
+
+export async function setPasswordFromLink(
+  userId: string,
+  token: string,
+  password: string,
+): Promise<CurrentUserDto> {
+  const { data } = await http.post<CurrentUserDto>('/auth/set-password', {
+    userId,
+    token,
+    password,
+  })
+  return data
+}
 
 export async function login(model: LoginDto): Promise<CurrentUserDto> {
   const { data } = await http.post<CurrentUserDto>('/auth/login', model)

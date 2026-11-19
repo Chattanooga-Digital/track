@@ -19,9 +19,13 @@ improvements, bug fixes, and new features by version.
  - Replace live data from a database dump imports it into the running database, stopping the rest of the stack meanwhile
  - Ignore volumes in bulk; ignored and empty volumes move to their own Ignored tab, and empty ones come back once they hold data
  - Watch a backup job's log live from the Jobs tab or by clicking a volume's status, including restic retries and dump progress
+ - New Settings page for administrators with an outgoing mail server and a test email
+ - Forgot your password? Ask for a reset link from the sign-in page
+ - Add a user by emailing them a link to set their own password, or send any user a new link from the Users page
 
 #### Changes
  - Anonymous volumes are no longer backed up, and a database keeping its data in one is flagged
+ - Users added without an email address no longer get a made-up one
  - Updated the SQLite driver, OpenAPI library and frontend packages to versions without known security issues
 
 #### Bug Fixes

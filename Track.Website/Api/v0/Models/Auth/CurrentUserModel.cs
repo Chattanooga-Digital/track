@@ -4,4 +4,5 @@ public class CurrentUserModel
 {
     public required string Username { get; set; }
     public required bool IsAdministrator { get; set; }
+    public string? Email { get; set; }
 }

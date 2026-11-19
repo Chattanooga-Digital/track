@@ -9,5 +9,6 @@ public class UserModel
     public required bool IsAdministrator { get; set; }
     public required bool Disabled { get; set; }
     public required bool LockedOut { get; set; }
+    public required bool HasPassword { get; set; }
     public required DateTime CreatedAt { get; set; }
 }

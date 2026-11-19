@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { CurrentUserDto } from '@/types/auth'
-import { login as apiLogin, logout as apiLogout, getCurrentUser } from '@/api/authApi'
+import {
+  login as apiLogin,
+  logout as apiLogout,
+  getCurrentUser,
+  setPasswordFromLink,
+} from '@/api/authApi'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<CurrentUserDto | null>(null)
@@ -19,6 +24,10 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = await apiLogin({ username, password })
   }
 
+  async function setPasswordAndSignIn(userId: string, token: string, password: string) {
+    user.value = await setPasswordFromLink(userId, token, password)
+  }
+
   async function logout() {
     await apiLogout()
     user.value = null
@@ -30,6 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     initialize,
     login,
+    setPasswordAndSignIn,
     logout,
   }
 })

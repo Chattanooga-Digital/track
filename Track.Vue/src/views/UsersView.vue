@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import type { UserDto } from '@/types/users'
-import { getUsers, createUser, updateUser, setUserPassword, deleteUser } from '@/api/usersApi'
+import {
+  getUsers,
+  createUser,
+  updateUser,
+  setUserPassword,
+  sendPasswordEmail,
+  deleteUser,
+} from '@/api/usersApi'
+import { getAuthOptions } from '@/api/authApi'
 import { apiErrorMessage } from '@/api/http'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useAuthStore } from '@/stores/authStore'
@@ -10,6 +18,8 @@ const authStore = useAuthStore()
 
 const users = ref<UserDto[]>([])
 const loading = ref(true)
+const mailAvailable = ref(false)
+const notice = ref({ show: false, text: '', error: false })
 
 const dialog = ref(false)
 const editing = ref<UserDto | null>(null)
@@ -32,6 +42,7 @@ function blankForm() {
     displayName: '',
     isAdministrator: false,
     disabled: false,
+    sendPasswordEmail: false,
   }
 }
 
@@ -44,13 +55,16 @@ async function refresh() {
   }
 }
 
-onMounted(refresh)
+onMounted(async () => {
+  await refresh()
+  mailAvailable.value = (await getAuthOptions()).passwordReset
+})
 
 const isSelf = (user: UserDto) => user.username === authStore.user?.username
 
 function openCreate() {
   editing.value = null
-  form.value = blankForm()
+  form.value = { ...blankForm(), sendPasswordEmail: mailAvailable.value }
   dialogError.value = ''
   dialog.value = true
 }
@@ -64,6 +78,7 @@ function openEdit(user: UserDto) {
     displayName: user.displayName ?? '',
     isAdministrator: user.isAdministrator,
     disabled: user.disabled,
+    sendPasswordEmail: false,
   }
   dialogError.value = ''
   dialog.value = true
@@ -83,7 +98,8 @@ async function save() {
     } else {
       await createUser({
         username: form.value.username,
-        password: form.value.password,
+        password: form.value.sendPasswordEmail ? null : form.value.password,
+        sendPasswordEmail: form.value.sendPasswordEmail,
         email: form.value.email || null,
         displayName: form.value.displayName || null,
         isAdministrator: form.value.isAdministrator,
@@ -120,6 +136,22 @@ async function savePassword() {
   }
 }
 
+async function emailPasswordLink(user: UserDto) {
+  try {
+    await sendPasswordEmail(user.id)
+    notice.value = { show: true, text: `Password link sent to ${user.email}.`, error: false }
+  } catch (e) {
+    notice.value = { show: true, text: apiErrorMessage(e, 'Sending the link failed.'), error: true }
+  }
+}
+
+function status(user: UserDto) {
+  if (user.disabled) return { text: 'Disabled', color: 'error' }
+  if (user.lockedOut) return { text: 'Locked out', color: 'warning' }
+  if (!user.hasPassword) return { text: 'Invited', color: 'info' }
+  return { text: 'Active', color: 'success' }
+}
+
 const deleteOpen = ref(false)
 const deleteTarget = ref<UserDto | null>(null)
 const deleting = ref(false)
@@ -148,7 +180,10 @@ async function confirmDelete() {
 
 const canSave = () =>
   editing.value !== null ||
-  (form.value.username.trim().length > 0 && form.value.password.length > 0)
+  (form.value.username.trim().length > 0 &&
+    (form.value.sendPasswordEmail
+      ? form.value.email.trim().length > 0
+      : form.value.password.length > 0))
 
 const canSavePassword = () =>
   newPassword.value.length > 0 && newPassword.value === confirmPassword.value
@@ -191,12 +226,8 @@ const canSavePassword = () =>
               </v-chip>
             </td>
             <td>
-              <v-chip
-                size="x-small"
-                :color="user.disabled ? 'error' : user.lockedOut ? 'warning' : 'success'"
-                variant="tonal"
-              >
-                {{ user.disabled ? 'Disabled' : user.lockedOut ? 'Locked out' : 'Active' }}
+              <v-chip size="x-small" :color="status(user).color" variant="tonal">
+                {{ status(user).text }}
               </v-chip>
             </td>
             <td class="text-medium-emphasis">
@@ -205,6 +236,15 @@ const canSavePassword = () =>
             <td class="text-right text-no-wrap">
               <v-btn size="small" variant="text" icon="mdi-pencil" @click="openEdit(user)" />
               <v-btn size="small" variant="text" icon="mdi-key" @click="openSetPassword(user)" />
+              <v-btn
+                size="small"
+                variant="text"
+                icon="mdi-email-lock"
+                title="Email password link"
+                aria-label="Email password link"
+                :disabled="!mailAvailable || !user.email"
+                @click="emailPasswordLink(user)"
+              />
               <v-btn
                 size="small"
                 variant="text"
@@ -230,8 +270,16 @@ const canSavePassword = () =>
             autocomplete="off"
             class="mb-2"
           />
+          <v-switch
+            v-if="!editing && mailAvailable"
+            v-model="form.sendPasswordEmail"
+            label="Email a link to set the password"
+            color="primary"
+            hide-details
+            class="mb-2"
+          />
           <v-text-field
-            v-if="!editing"
+            v-if="!editing && !form.sendPasswordEmail"
             v-model="form.password"
             label="Password"
             type="password"
@@ -308,6 +356,10 @@ const canSavePassword = () =>
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-snackbar v-model="notice.show" :color="notice.error ? 'error' : 'success'" timeout="4000">
+      {{ notice.text }}
+    </v-snackbar>
 
     <ConfirmDialog
       v-model="deleteOpen"
