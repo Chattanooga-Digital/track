@@ -23,6 +23,7 @@ import { absoluteTime, formatBytes, relativeTime } from '@/utils/format'
 import RestoreDialog from '@/components/RestoreDialog.vue'
 import SnapshotBrowser from '@/components/SnapshotBrowser.vue'
 import BackupJobsTable from '@/components/BackupJobsTable.vue'
+import BackupJobDialog from '@/components/BackupJobDialog.vue'
 import BackupSettingsPanel from '@/components/BackupSettingsPanel.vue'
 
 const { backupsVersion } = storeToRefs(useSnapshotStore())
@@ -35,6 +36,7 @@ const busyKey = ref<string | null>(null)
 const message = ref<{ text: string; error: boolean } | null>(null)
 const restoreVolume = ref<BackupVolumeDto | null>(null)
 const browseVolume = ref<BackupVolumeDto | null>(null)
+const jobId = ref<number | null>(null)
 const selected = ref<string[]>([])
 
 const configured = computed(() => !!overview.value?.targetSet && !!overview.value?.masterKeySet)
@@ -424,6 +426,12 @@ function testTooltip(v: BackupVolumeDto) {
                       size="small"
                       :color="statusChip(v).color"
                       :variant="statusChip(v).variant ?? 'tonal'"
+                      :append-icon="v.activeJobId ? 'mdi-text-box-outline' : undefined"
+                      @click="
+                        (v.activeJobId ?? v.lastJobId) !== null
+                          ? (jobId = v.activeJobId ?? v.lastJobId)
+                          : undefined
+                      "
                       >{{ statusChip(v).text }}</v-chip
                     >
                     <v-chip
@@ -561,6 +569,7 @@ function testTooltip(v: BackupVolumeDto) {
       @started="(text) => (message = { text, error: false })"
     />
     <SnapshotBrowser :volume="browseVolume" @update:volume="browseVolume = $event" />
+    <BackupJobDialog v-model:job-id="jobId" />
   </div>
 </template>
 

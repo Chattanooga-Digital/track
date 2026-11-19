@@ -49,6 +49,9 @@ public class BackupJob : IEntityTypeConfiguration<BackupJob>
     public bool CancelRequested { get; set; }
     public string? RequestedBy { get; set; }
 
+    /// <summary>The live log session the job's output streams to, watched from the job dialog.</summary>
+    public Guid LogSessionId { get; set; } = Guid.NewGuid();
+
     public bool IsActive => Status is BackupJobStatus.Queued or BackupJobStatus.Dispatched or BackupJobStatus.Running;
 
     public void Configure(EntityTypeBuilder<BackupJob> builder)
@@ -65,5 +68,6 @@ public class BackupJob : IEntityTypeConfiguration<BackupJob>
         builder.HasIndex(j => new { j.VolumeKey, j.QueuedAt });
         builder.HasIndex(j => j.ParentJobId);
         builder.HasIndex(j => j.QueuedAt);
+        builder.HasIndex(j => j.LogSessionId);
     }
 }

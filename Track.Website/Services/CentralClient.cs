@@ -70,6 +70,12 @@ public sealed class CentralClient(HttpClient httpClient, IOptions<TrackOptions> 
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task PostLogAsync(AgentLogBatch batch, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.PostAsJsonAsync("/api/v0/agent/jobs/log", batch, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
     /// <summary>Applies the base address and shared-secret header from configuration to the typed client.</summary>
     public static void Configure(IServiceProvider services, HttpClient client)
     {

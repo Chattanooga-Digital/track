@@ -47,7 +47,13 @@ public sealed record AgentJob(
     bool StopContainers,
     List<ServiceReplicas> Scale,
     int HookTimeoutSeconds,
-    DatabaseDump? Dump = null);
+    DatabaseDump? Dump = null,
+    Guid? LogSessionId = null);
+
+public sealed record AgentLogLine(string Message, int Level);
+
+/// <summary>Lines an agent's job wrote, for the session the central handed out with the job.</summary>
+public sealed record AgentLogBatch(Guid SessionId, List<AgentLogLine> Lines);
 
 public sealed record AgentJobProgress(double? PercentDone, long? BytesDone, long? BytesTotal);
 

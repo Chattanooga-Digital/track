@@ -10,6 +10,10 @@ using Track.Website.Services;
 using Track.Website.Services.Backups;
 using Track.Services.Docker;
 using Microsoft.AspNetCore.HttpOverrides;
+using RoushTech.Asio;
+using RoushTech.Asio.Forwarding;
+using RoushTech.Asio.InMemory;
+using RoushTech.Asio.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +21,10 @@ builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, relo
 builder.Configuration.AddEnvironmentVariables();
 
 var trackOptions = builder.Configuration.GetSection(TrackOptions.Section).Get<TrackOptions>() ?? new TrackOptions();
+
+// A job's live log carries Track's own messages only, not the HTTP and framework chatter around them.
+builder.Logging.AddFilter<JobSessionLoggerProvider>((category, level) =>
+    level >= LogLevel.Information && category?.StartsWith("Track.", StringComparison.Ordinal) == true);
 
 if (trackOptions.Mode == TrackMode.Agent)
 {
@@ -30,6 +38,7 @@ if (trackOptions.Mode == TrackMode.Agent)
     builder.Services.AddSingleton<HookRunner>();
     builder.Services.AddSingleton<BackupJobRunner>();
     builder.Services.AddHttpClient<CentralClient>(CentralClient.Configure);
+    builder.Services.AddAsio().AddAsioForwarding().AddSingleton<IAsioForwardingTransport, CentralLogTransport>();
     builder.Services
         .AddHostedService<StatsPushHostedService>()
         .AddHostedService<DiskPushHostedService>()
@@ -56,7 +65,16 @@ builder.Services
     .AddOpenApi()
     .AddSignalR()
     .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
+    // Every signed-in user can already see every job, so a session needs no owner check beyond the hub's login.
+    .AddAsioSignalR(options => options.UseDefaultOwnerAuthorization = false)
     .Services
+    .AddAsio()
+    .AddAsioInMemory(options =>
+    {
+        options.PerSessionLogCapacity = 2000;
+        options.MaxSessions = 300;
+    })
+    .AddSingleton<JobLogs>()
     // AddTrack wires up Identity (AddIdentity + cookie configuration); see Track/DependencyInjection.
     .AddTrack(builder.Configuration)
     .AddScoped<SnapshotBuilder>()
@@ -105,6 +123,7 @@ app
 
         endpoints.MapControllers();
         endpoints.MapHub<TrackHub>(TrackHub.HubPath);
+        endpoints.MapAsioHub("/hubs/job-log");
         endpoints.MapFallbackToFile("index.html");
     });
 

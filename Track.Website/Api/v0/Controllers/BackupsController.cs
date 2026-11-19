@@ -20,21 +20,20 @@ public class BackupsController(
     TrackContext trackContext,
     BackupCatalogService catalogService,
     BackupJobFactory jobFactory,
-    BackupScheduler scheduler,
     BackupSecretProtector secretProtector,
     BackupMasterKey masterKey,
     BackupTargetTester targetTester,
     ResticTargets resticTargets,
     ResticRunner restic,
     BackupRuntimeState runtime,
-    BackupNotifier notifier) : ControllerBase
+    BackupNotifier notifier,
+    JobLogs jobLogs) : ControllerBase
 {
     private const int MaxJobs = 300;
 
     protected TrackContext TrackContext { get; } = trackContext;
     protected BackupCatalogService CatalogService { get; } = catalogService;
     protected BackupJobFactory JobFactory { get; } = jobFactory;
-    protected BackupScheduler Scheduler { get; } = scheduler;
     protected BackupSecretProtector SecretProtector { get; } = secretProtector;
     protected BackupMasterKey MasterKey { get; } = masterKey;
     protected BackupTargetTester TargetTester { get; } = targetTester;
@@ -42,6 +41,7 @@ public class BackupsController(
     protected ResticRunner Restic { get; } = restic;
     protected BackupRuntimeState Runtime { get; } = runtime;
     protected BackupNotifier Notifier { get; } = notifier;
+    protected JobLogs JobLogs { get; } = jobLogs;
 
     [HttpGet]
     public async Task<IActionResult> Overview(CancellationToken cancellationToken)
@@ -146,7 +146,7 @@ public class BackupsController(
 
         JobFactory.QueueVerify(snapshot, image, node, User.Identity?.Name);
         await TrackContext.SaveChangesAsync(cancellationToken);
-        await Scheduler.TickAsync(cancellationToken);
+        Runtime.WakeScheduler();
         await Notifier.ChangedAsync(cancellationToken);
         return NoContent();
     }
@@ -166,7 +166,7 @@ public class BackupsController(
 
         await JobFactory.QueueBackupAsync(state, BackupTrigger.Manual, User.Identity?.Name, cancellationToken);
         await TrackContext.SaveChangesAsync(cancellationToken);
-        await Scheduler.TickAsync(cancellationToken);
+        Runtime.WakeScheduler();
         await Notifier.ChangedAsync(cancellationToken);
         return NoContent();
     }
@@ -182,7 +182,7 @@ public class BackupsController(
             await JobFactory.QueueBackupAsync(state, BackupTrigger.Manual, User.Identity?.Name, cancellationToken);
 
         await TrackContext.SaveChangesAsync(cancellationToken);
-        await Scheduler.TickAsync(cancellationToken);
+        Runtime.WakeScheduler();
         await Notifier.ChangedAsync(cancellationToken);
         return NoContent();
     }
@@ -339,7 +339,7 @@ public class BackupsController(
 
             var job = JobFactory.QueueRestoreToNewVolume(snapshot, node, User.Identity?.Name);
             await TrackContext.SaveChangesAsync(cancellationToken);
-            await Scheduler.TickAsync(cancellationToken);
+            Runtime.WakeScheduler();
             return Ok(new { job.Id, Volume = JobParameters.Parse(job.ParametersJson).RestoreVolume });
         }
 
@@ -362,7 +362,7 @@ public class BackupsController(
         var manager = catalog.Swarm is not null && catalog.ReadyNodes.Contains(catalog.Swarm.NodeName) ? catalog.Swarm.NodeName : null;
         var parent = await JobFactory.QueueReplaceAsync(state, snapshot, catalog.Swarm, manager, User.Identity?.Name, cancellationToken);
         await TrackContext.SaveChangesAsync(cancellationToken);
-        await Scheduler.TickAsync(cancellationToken);
+        Runtime.WakeScheduler();
         return Ok(new { parent.Id });
     }
 
@@ -399,12 +399,17 @@ public class BackupsController(
             return Conflict("That job has already finished.");
 
         if (job.Status == BackupJobStatus.Queued && job.Kind != BackupJobKind.Replace)
+        {
             BackupScheduler.Finish(job, BackupJobStatus.Cancelled, "Cancelled");
+            await JobLogs.CompleteAsync(job);
+        }
         else
+        {
             job.CancelRequested = true;
+        }
 
         await TrackContext.SaveChangesAsync(cancellationToken);
-        await Scheduler.TickAsync(cancellationToken);
+        Runtime.WakeScheduler();
         await Notifier.ChangedAsync(cancellationToken);
         return NoContent();
     }
@@ -620,6 +625,7 @@ public class BackupsController(
             LastGoodAt = state.LastGoodAt,
             ActiveJobId = state.ActiveJob?.Id,
             ActiveJobKind = state.ActiveJob?.Kind,
+            LastJobId = state.LastJob?.Id,
             PercentDone = state.ActiveJob?.PercentDone,
             LastError = state.Status == BackupVolumeStatus.Failed ? state.LastJob?.Error : null,
             ReplaceBlockedReason = state.ReplaceBlockedReason,
@@ -673,6 +679,7 @@ public class BackupsController(
         SnapshotId = job.SnapshotId,
         Error = job.Error,
         Summary = job.Summary,
+        LogSessionId = job.LogSessionId == Guid.Empty ? null : job.LogSessionId,
         RequestedBy = job.RequestedBy,
         CancelRequested = job.CancelRequested,
         Output = includeOutput ? job.OutputTail : null,

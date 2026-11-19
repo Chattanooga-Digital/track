@@ -26,6 +26,7 @@ public class BackupJobModel
     public string? SnapshotId { get; set; }
     public string? Error { get; set; }
     public string? Summary { get; set; }
+    public Guid? LogSessionId { get; set; }
     public string? RequestedBy { get; set; }
     public bool CancelRequested { get; set; }
     public string? Output { get; set; }

@@ -16,7 +16,8 @@ public sealed class BackupScheduler(
     ResticRunner restic,
     BackupRuntimeState runtime,
     BackupNotifier notifier,
-    IHttpClientFactory httpClientFactory)
+    IHttpClientFactory httpClientFactory,
+    JobLogs jobLogs)
 {
     public static readonly BackupJobKind[] AgentKinds =
         [BackupJobKind.Backup, BackupJobKind.Restore, BackupJobKind.Hook, BackupJobKind.Scale, BackupJobKind.Import, BackupJobKind.Verify];
@@ -28,6 +29,9 @@ public sealed class BackupScheduler(
     private static readonly TimeSpan DispatchTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromMinutes(5);
 
+    // restic retries an unreachable bucket for many minutes, which would hold up every other job meanwhile.
+    private static readonly TimeSpan RepositorySetupTimeout = TimeSpan.FromMinutes(2);
+
     private readonly ILogger<BackupScheduler> _logger = logger;
     private readonly TrackContext _context = context;
     private readonly BackupCatalogService _catalogService = catalogService;
@@ -37,6 +41,7 @@ public sealed class BackupScheduler(
     private readonly BackupRuntimeState _runtime = runtime;
     private readonly BackupNotifier _notifier = notifier;
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+    private readonly JobLogs _jobLogs = jobLogs;
 
     public async Task TickAsync(CancellationToken cancellationToken)
     {
@@ -188,6 +193,12 @@ public sealed class BackupScheduler(
             else if (job.Status == BackupJobStatus.Running && now - (job.LastProgressAt ?? job.StartedAt ?? job.QueuedAt) > quietLimit)
             {
                 Finish(job, BackupJobStatus.Failed, "The agent stopped reporting");
+                await _jobLogs.InSessionAsync(job, () =>
+                {
+                    _logger.LogWarning("{Node} stopped reporting, so the job was marked failed", job.NodeName);
+                    return Task.CompletedTask;
+                });
+                await _jobLogs.CompleteAsync(job);
                 changed = true;
             }
         }
@@ -248,19 +259,17 @@ public sealed class BackupScheduler(
                 if (!repositories.TryGetValue(job.RepositoryKey, out var repository))
                 {
                     Finish(job, BackupJobStatus.Failed, $"Repository {job.RepositoryKey} isn't known");
+                    await _jobLogs.CompleteAsync(job);
                     changed = true;
                     continue;
                 }
                 if (repository.InitializedAt is null)
                 {
-                    try
+                    var setupError = await SetUpRepositoryAsync(job, repository, catalog.Target!, cancellationToken);
+                    if (setupError is not null)
                     {
-                        await InitializeAsync(repository, catalog.Target!, cancellationToken);
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        _logger.LogError(ex, "Couldn't set up backup repository {Key}", repository.Key);
-                        Finish(job, BackupJobStatus.Failed, $"Couldn't set up repository {repository.Key}: {ex.Message}");
+                        Finish(job, BackupJobStatus.Failed, setupError);
+                        await _jobLogs.CompleteAsync(job);
                         changed = true;
                         continue;
                     }
@@ -269,6 +278,11 @@ public sealed class BackupScheduler(
 
             job.Status = BackupJobStatus.Dispatched;
             job.DispatchedAt = DateTime.UtcNow;
+            await _jobLogs.InSessionAsync(job, () =>
+            {
+                _logger.LogInformation("Waiting for {Node} to pick up the job", job.NodeName);
+                return Task.CompletedTask;
+            });
             if (heavy)
             {
                 perNode[job.NodeName] = perNode.GetValueOrDefault(job.NodeName) + 1;
@@ -279,6 +293,36 @@ public sealed class BackupScheduler(
 
         await _context.SaveChangesAsync(cancellationToken);
         return changed;
+    }
+
+    /// <summary>The reason the job can't go ahead, or null once the repository exists.</summary>
+    private async Task<string?> SetUpRepositoryAsync(
+        BackupJob job, BackupRepository repository, BackupTarget target, CancellationToken cancellationToken)
+    {
+        string? error = null;
+        await _jobLogs.InSessionAsync(job, async () =>
+        {
+            _logger.LogInformation("Setting up repository {Key} in {Bucket}", repository.Key, target.Bucket);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(RepositorySetupTimeout);
+            try
+            {
+                await InitializeAsync(repository, target, timeout.Token);
+                _logger.LogInformation("Repository {Key} is ready", repository.Key);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                error = $"Couldn't reach the backup bucket within {RepositorySetupTimeout.TotalMinutes:0} minutes to set up {repository.Key}";
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                error = $"Couldn't set up repository {repository.Key}: {ex.Message}";
+            }
+
+            if (error is not null)
+                _logger.LogError("{Error}", error);
+        });
+        return error;
     }
 
     private async Task InitializeAsync(BackupRepository repository, BackupTarget target, CancellationToken cancellationToken)

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Track.Configuration;
 using Track.Services.Backups;
 using Microsoft.Extensions.Options;
@@ -15,11 +16,12 @@ public sealed record ResticResult(int ExitCode, string StandardOutput, string St
 }
 
 /// <summary>Central: runs the restic binary bundled in the image, for repository setup, maintenance and downloads.</summary>
-public sealed class ResticRunner(IOptions<TrackOptions> options)
+public sealed class ResticRunner(IOptions<TrackOptions> options, ILogger<ResticRunner> logger)
 {
     public const int RepositoryMissingExitCode = 10;
 
     private readonly string _resticPath = options.Value.Backups.ResticPath;
+    private readonly ILogger<ResticRunner> _logger = logger;
 
     public async Task<string> VersionAsync(CancellationToken cancellationToken)
     {
@@ -49,7 +51,7 @@ public sealed class ResticRunner(IOptions<TrackOptions> options)
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Couldn't start {_resticPath}");
         try
         {
-            var error = process.StandardError.ReadToEndAsync(cancellationToken);
+            var error = ReadErrorsAsync(process.StandardError, cancellationToken);
             string standardOutput;
             if (output is null)
             {
@@ -69,5 +71,19 @@ public sealed class ResticRunner(IOptions<TrackOptions> options)
             process.Kill(entireProcessTree: true);
             throw;
         }
+    }
+
+    // Logged line by line so a job's live log shows restic retrying, rather than nothing until it gives up.
+    private async Task<string> ReadErrorsAsync(StreamReader reader, CancellationToken cancellationToken)
+    {
+        var text = new StringBuilder();
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            text.AppendLine(line);
+            if (line.Length > 0)
+                _logger.LogInformation("{Line}", line);
+        }
+
+        return text.ToString();
     }
 }

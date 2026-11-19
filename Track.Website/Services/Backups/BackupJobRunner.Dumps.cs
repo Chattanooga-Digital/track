@@ -34,6 +34,7 @@ public sealed partial class BackupJobRunner
         if (database is null)
             return Failed($"{dump.ServiceName} isn't running here, so its database can't be dumped", output);
 
+        output.Append($"Dumping {dump.Engine} from {dump.ServiceName}");
         var helper = await CreateHelperAsync(client, job, DumpBackupArguments(job), [], null, cancellationToken, openStdin: true);
         using var stdin = await client.Containers.AttachContainerAsync(
             helper, false, new ContainerAttachParameters { Stream = true, Stdin = true }, cancellationToken);
@@ -46,7 +47,10 @@ public sealed partial class BackupJobRunner
         {
             dumped = await PipeExecAsync(client, database, DatabaseDumps.DumpCommand(dump.Engine), stdin, output, null, cancellationToken);
             if (dumped is { ExitCode: 0, SinkFailed: false })
+            {
+                output.Append($"Dumped {Size(dumped.Bytes)}");
                 markerError = await MarkDumpCompleteAsync(client, helper, cancellationToken);
+            }
         }
         finally
         {
@@ -119,7 +123,7 @@ public sealed partial class BackupJobRunner
         try
         {
             await client.Containers.StartContainerAsync(scratch.ID, new ContainerStartParameters(), cancellationToken);
-            output.Append($"Started a throwaway {dump.Image}");
+            output.Append($"Started a throwaway {dump.Image}, waiting for it to accept connections");
             if (await WaitUntilReadyAsync(client, scratch.ID, dump.Engine, cancellationToken) is { } notReady)
                 return Failed(notReady, output);
 
@@ -149,6 +153,8 @@ public sealed partial class BackupJobRunner
     private async Task<ImportOutcome> ImportSnapshotAsync(
         DockerClient client, AgentJob job, string containerId, DatabaseEngine engine, OutputLog output, CancellationToken cancellationToken)
     {
+        var snapshotId = job.SnapshotId!;
+        output.Append($"Importing snapshot {snapshotId[..Math.Min(8, snapshotId.Length)]}");
         var helper = await CreateHelperAsync(client, job,
             ["dump", job.SnapshotId!, job.SnapshotPath!, .. job.Restic!.Options], [], null, cancellationToken, attachOutput: true);
         using var source = await client.Containers.AttachContainerAsync(

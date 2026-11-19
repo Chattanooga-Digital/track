@@ -7,6 +7,7 @@ using Track.Enums;
 using Track.Services.Backups;
 using Track.Services.Docker;
 using Microsoft.Extensions.Options;
+using RoushTech.Asio;
 
 namespace Track.Website.Services.Backups;
 
@@ -50,8 +51,10 @@ public sealed partial class BackupJobRunner(
             if (job is null)
                 return;
 
+            if (job.LogSessionId is { } session)
+                JobSessionService.ActivateSession(session);
             _logger.LogInformation("Running {Kind} job {Id} for {Volume}", job.Kind, id, job.VolumeName);
-            var output = new OutputLog();
+            var output = new OutputLog(_logger);
             AgentJobResult result;
             try
             {
@@ -109,9 +112,14 @@ public sealed partial class BackupJobRunner(
             preHooksRan = true;
             var hookError = await _hookRunner.RunAllAsync(client, volume, job.PreHooks, hookTimeout, false, output, cancellationToken);
             if (hookError is not null)
+            {
                 result = Failed(hookError, output);
+            }
             else
+            {
+                output.Append(job.Paths.Count == 0 ? $"Backing up {volume}" : $"Backing up {string.Join(", ", job.Paths)} in {volume}");
                 helper = await CreateHelperAsync(client, job, BackupArguments(job), [$"{volume}:/data/{volume}:ro"], null, cancellationToken);
+            }
         }
 
         if (helper is not null)
@@ -161,6 +169,7 @@ public sealed partial class BackupJobRunner(
             }
 
             stopped = job.StopContainers ? await StopUsersAsync(client, target, output, cancellationToken) : [];
+            output.Append($"Restoring snapshot {job.SnapshotId?[..Math.Min(8, job.SnapshotId.Length)]} into {target}");
             var arguments = new List<string> { "restore", "--json", $"{job.SnapshotId}:{job.SnapshotPath}", "--target", "/restore" };
             if (job.RestoreDelete)
                 arguments.Add("--delete");
@@ -299,11 +308,18 @@ public sealed partial class BackupJobRunner(
         DockerClient client, long jobId, string containerId, HelperState state, CancellationToken cancellationToken)
     {
         using var timer = new PeriodicTimer(ProgressInterval);
+        long? lastLogged = null;
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
             try
             {
                 var status = state.Status;
+                if (status?.BytesDone is { } done && done != lastLogged)
+                {
+                    lastLogged = done;
+                    _logger.LogInformation("{Progress}", Describe(status));
+                }
+
                 var response = await _centralClient.PostProgressAsync(
                     jobId, new AgentJobProgress(status?.PercentDone, status?.BytesDone, status?.TotalBytes), cancellationToken);
                 if (response?.Cancel == true && !state.Cancelled)
@@ -485,6 +501,13 @@ public sealed partial class BackupJobRunner(
                 await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
             }
         }
+    }
+
+    private static string Describe(ResticStatus status)
+    {
+        var done = Size(status.BytesDone ?? 0);
+        var amount = status.TotalBytes is > 0 ? $"{done} of {Size(status.TotalBytes.Value)}" : done;
+        return status.PercentDone is { } percent ? $"{percent:P0} · {amount}" : amount;
     }
 
     private static string ResticError(long exitCode, OutputLog output) => exitCode switch

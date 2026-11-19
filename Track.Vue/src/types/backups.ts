@@ -65,6 +65,7 @@ export interface BackupVolumeDto {
   lastGoodAt: string | null
   activeJobId: number | null
   activeJobKind: BackupJobKind | null
+  lastJobId: number | null
   percentDone: number | null
   lastError: string | null
   replaceBlockedReason: string | null
@@ -130,6 +131,7 @@ export interface BackupJobDto {
   snapshotId: string | null
   error: string | null
   summary: string | null
+  logSessionId: string | null
   requestedBy: string | null
   cancelRequested: boolean
   output: string | null

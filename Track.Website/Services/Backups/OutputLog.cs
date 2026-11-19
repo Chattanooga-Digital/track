@@ -2,8 +2,8 @@ using System.Text;
 
 namespace Track.Website.Services.Backups;
 
-/// <summary>The tail of a job's output, kept small enough to store on the job.</summary>
-public sealed class OutputLog(int maxChars = 64 * 1024)
+/// <summary>The tail of a job's output, kept small enough to store on the job. Each line is also logged, for the live view.</summary>
+public sealed class OutputLog(ILogger? logger = null, int maxChars = 64 * 1024)
 {
     private readonly object _lock = new();
     private readonly LinkedList<string> _lines = new();
@@ -20,6 +20,7 @@ public sealed class OutputLog(int maxChars = 64 * 1024)
 
     public void Append(string line)
     {
+        logger?.LogInformation("{Line}", line);
         lock (_lock)
         {
             _lines.AddLast(line);

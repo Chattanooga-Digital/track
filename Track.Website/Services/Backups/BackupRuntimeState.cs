@@ -9,8 +9,24 @@ public sealed class BackupRuntimeState
     private readonly ConcurrentDictionary<string, DateTime> _maintenanceFailedAt = new();
     private volatile int _needsAttention;
     private volatile bool _maintenanceRequested;
+    private readonly SemaphoreSlim _wake = new(0, 1);
 
     public SemaphoreSlim SchedulerGate { get; } = new(1, 1);
+
+    /// <summary>Asks for a scheduler pass now, without making the caller wait for it.</summary>
+    public void WakeScheduler()
+    {
+        try
+        {
+            _wake.Release();
+        }
+        catch (SemaphoreFullException)
+        {
+        }
+    }
+
+    public async Task WaitForWakeAsync(TimeSpan timeout, CancellationToken cancellationToken) =>
+        await _wake.WaitAsync(timeout, cancellationToken);
 
     public DateTime LastHeartbeat { get; set; }
 

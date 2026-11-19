@@ -15,7 +15,7 @@ namespace Track.Data.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
@@ -196,6 +196,9 @@ namespace Track.Data.Migrations
                     b.Property<DateTime?>("LastProgressAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("LogSessionId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("NodeName")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
@@ -256,6 +259,8 @@ namespace Track.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LogSessionId");
 
                     b.HasIndex("ParentJobId");
 

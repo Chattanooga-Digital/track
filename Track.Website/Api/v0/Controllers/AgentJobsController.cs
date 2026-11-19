@@ -19,15 +19,19 @@ public class AgentJobsController(
     TrackContext trackContext,
     AgentEnrollmentRegistry enrollment,
     ResticTargets resticTargets,
-    BackupScheduler scheduler,
-    BackupNotifier notifier) : ControllerBase
+    BackupRuntimeState runtime,
+    BackupNotifier notifier,
+    JobLogs jobLogs,
+    ILogger<AgentJobsController> logger) : ControllerBase
 {
     protected TrackOptions Options { get; } = options.Value;
     protected TrackContext TrackContext { get; } = trackContext;
     protected AgentEnrollmentRegistry Enrollment { get; } = enrollment;
     protected ResticTargets ResticTargets { get; } = resticTargets;
-    protected BackupScheduler Scheduler { get; } = scheduler;
+    protected BackupRuntimeState Runtime { get; } = runtime;
     protected BackupNotifier Notifier { get; } = notifier;
+    protected JobLogs JobLogs { get; } = jobLogs;
+    protected ILogger<AgentJobsController> Logger { get; } = logger;
 
     [HttpGet("{id:long}")]
     public async Task<IActionResult> Get([FromRoute] long id, CancellationToken cancellationToken)
@@ -52,6 +56,7 @@ public class AgentJobsController(
             catch (InvalidOperationException ex)
             {
                 BackupScheduler.Finish(job, BackupJobStatus.Failed, ex.Message);
+                await JobLogs.CompleteAsync(job);
                 await TrackContext.SaveChangesAsync(cancellationToken);
                 await Notifier.ChangedAsync(cancellationToken);
                 return NotFound();
@@ -63,6 +68,11 @@ public class AgentJobsController(
         job.StartedAt ??= DateTime.UtcNow;
         job.LastProgressAt = DateTime.UtcNow;
         await TrackContext.SaveChangesAsync(cancellationToken);
+        await JobLogs.InSessionAsync(job, () =>
+        {
+            Logger.LogInformation("{Node} started the job", node);
+            return Task.CompletedTask;
+        });
         await Notifier.ChangedAsync(cancellationToken);
 
         var parameters = JobParameters.Parse(job.ParametersJson);
@@ -84,7 +94,8 @@ public class AgentJobsController(
             parameters.StopContainers,
             parameters.Scale ?? [],
             settings.HookTimeoutMinutes * 60,
-            parameters.Dump));
+            parameters.Dump,
+            job.LogSessionId));
     }
 
     [HttpPost("{id:long}/progress")]
@@ -154,14 +165,30 @@ public class AgentJobsController(
         }
 
         await TrackContext.SaveChangesAsync(cancellationToken);
+        await JobLogs.CompleteAsync(job);
 
         // A restore's next step shouldn't wait for the scheduler's next pass while services are down.
         if (job.ParentJobId is not null)
-            await Scheduler.TickAsync(cancellationToken);
-        else
-            await Notifier.ChangedAsync(cancellationToken);
+            Runtime.WakeScheduler();
+        await Notifier.ChangedAsync(cancellationToken);
 
         return Ok();
+    }
+
+    /// <summary>Live output from a job this node runs, into the job's log session.</summary>
+    [HttpPost("log")]
+    public async Task<IActionResult> Log([FromBody] AgentLogBatch batch, CancellationToken cancellationToken)
+    {
+        if (CallingNode() is not { } node)
+            return Unauthorized();
+
+        var job = await TrackContext.BackupJobs.AsNoTracking()
+            .SingleOrDefaultAsync(j => j.LogSessionId == batch.SessionId && j.NodeName == node, cancellationToken);
+        if (job is null)
+            return NotFound();
+
+        await JobLogs.AppendAsync(job, batch.Lines.Select(l => (l.Message, Math.Clamp(l.Level, 0, 5))));
+        return NoContent();
     }
 
     private string? CallingNode() =>

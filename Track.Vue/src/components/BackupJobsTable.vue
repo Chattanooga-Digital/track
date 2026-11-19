@@ -3,14 +3,16 @@ import { onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSnapshotStore } from '@/stores/snapshotStore'
 import type { BackupJobDto } from '@/types/backups'
-import { cancelBackupJob, getBackupJob, getBackupJobs } from '@/api/backupsApi'
+import { cancelBackupJob, getBackupJobs } from '@/api/backupsApi'
+import { isJobActive as active, jobKindLabel as kindLabel } from '@/utils/backupJobs'
+import BackupJobDialog from '@/components/BackupJobDialog.vue'
 import { absoluteTime, formatBytes, relativeTime } from '@/utils/format'
 
 const { backupsVersion } = storeToRefs(useSnapshotStore())
 
 const jobs = ref<BackupJobDto[]>([])
 const loading = ref(true)
-const detail = ref<BackupJobDto | null>(null)
+const detailId = ref<number | null>(null)
 const cancelling = ref<number | null>(null)
 
 async function load() {
@@ -19,14 +21,13 @@ async function load() {
   } finally {
     loading.value = false
   }
-  if (detail.value) detail.value = await getBackupJob(detail.value.id)
 }
 
 onMounted(load)
 watch(backupsVersion, load)
 
-async function openDetail(job: BackupJobDto) {
-  detail.value = await getBackupJob(job.id)
+function openDetail(job: BackupJobDto) {
+  detailId.value = job.id
 }
 
 async function cancel(job: BackupJobDto) {
@@ -37,20 +38,6 @@ async function cancel(job: BackupJobDto) {
   } finally {
     cancelling.value = null
   }
-}
-
-const active = (job: BackupJobDto) => ['Queued', 'Dispatched', 'Running'].includes(job.status)
-
-const kindLabel: Record<string, string> = {
-  Backup: 'Backup',
-  Restore: 'Restore',
-  Hook: 'Hook',
-  Scale: 'Scale',
-  Prune: 'Prune',
-  Check: 'Check',
-  Replace: 'Replace live data',
-  Import: 'Import',
-  Verify: 'Test restore',
 }
 
 function statusColor(job: BackupJobDto) {
@@ -153,38 +140,7 @@ function duration(job: BackupJobDto) {
     </div>
   </v-card>
 
-  <v-dialog :model-value="detail !== null" max-width="760" @update:model-value="detail = null">
-    <v-card v-if="detail">
-      <v-card-title>{{ detail.stepName ?? kindLabel[detail.kind] }} #{{ detail.id }}</v-card-title>
-      <v-card-subtitle>
-        {{
-          [detail.volumeName ?? detail.repositoryKey, detail.nodeName, detail.status]
-            .filter(Boolean)
-            .join(' · ')
-        }}
-      </v-card-subtitle>
-      <v-card-text>
-        <v-alert v-if="detail.error" type="error" variant="tonal" density="compact" class="mb-3">
-          {{ detail.error }}
-        </v-alert>
-        <div v-if="detail.snapshotId" class="text-body-2 mb-3">
-          Snapshot {{ detail.snapshotId.slice(0, 8) }}
-          <template v-if="detail.bytesAdded !== null">
-            · {{ formatBytes(detail.bytesAdded) }} added</template
-          >
-          <template v-if="detail.filesNew !== null">
-            · {{ detail.filesNew }} new, {{ detail.filesChanged ?? 0 }} changed files</template
-          >
-        </div>
-        <pre v-if="detail.output" class="output">{{ detail.output }}</pre>
-        <div v-else class="text-medium-emphasis">No output.</div>
-      </v-card-text>
-      <v-card-actions>
-        <v-spacer />
-        <v-btn variant="text" @click="detail = null">Close</v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+  <BackupJobDialog v-model:job-id="detailId" />
 </template>
 
 <style scoped>
@@ -194,17 +150,5 @@ function duration(job: BackupJobDto) {
 
 .job-row {
   cursor: pointer;
-}
-
-.output {
-  max-height: 420px;
-  overflow: auto;
-  padding: 12px;
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  background: rgba(var(--v-theme-on-surface), 0.05);
-  border-radius: 4px;
 }
 </style>

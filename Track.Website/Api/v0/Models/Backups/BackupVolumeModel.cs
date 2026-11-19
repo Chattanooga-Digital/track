@@ -35,6 +35,7 @@ public class BackupVolumeModel
     public DateTime? LastGoodAt { get; set; }
     public long? ActiveJobId { get; set; }
     public BackupJobKind? ActiveJobKind { get; set; }
+    public long? LastJobId { get; set; }
     public double? PercentDone { get; set; }
     public string? LastError { get; set; }
     public string? ReplaceBlockedReason { get; set; }

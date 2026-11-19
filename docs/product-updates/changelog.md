@@ -18,6 +18,7 @@ improvements, bug fixes, and new features by version.
  - Browse any snapshot's folders and download a single file or folder
  - Replace live data from a database dump imports it into the running database, stopping the rest of the stack meanwhile
  - Ignore volumes in bulk; ignored and empty volumes move to their own Ignored tab, and empty ones come back once they hold data
+ - Watch a backup job's log live from the Jobs tab or by clicking a volume's status, including restic retries and dump progress
 
 #### Changes
  - Anonymous volumes are no longer backed up, and a database keeping its data in one is flagged
@@ -28,6 +29,7 @@ improvements, bug fixes, and new features by version.
  - The Backups page fits on screen with back up and restore buttons on each volume, Protected counts only volumes with a recent backup, and volumes not backed up yet no longer need attention
  - The no dump hook warning only flags volumes a database keeps its data in, not its init scripts
  - Empty values show blank instead of a dash
+ - Back up now and other backup actions no longer hang while a repository is set up, and setting one up gives up after 2 minutes with restic's error
 
 ### 0.9.1 - 2026-11-03
 #### Features

@@ -13,6 +13,10 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="RoushTech.Asio" Version="0.6.0" />
+    <PackageReference Include="RoushTech.Asio.Forwarding" Version="0.6.0" />
+    <PackageReference Include="RoushTech.Asio.InMemory" Version="0.6.0" />
+    <PackageReference Include="RoushTech.Asio.SignalR" Version="0.6.0" />
   </ItemGroup>
 
   <ItemGroup>

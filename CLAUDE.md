@@ -323,6 +323,14 @@ through the central.
   `check --read-data-subset`. A failed run backs off for an hour (a cancelled backup's lock goes stale
   after 30 minutes). The bucket should have versioning and default object-lock retention so a stolen
   agent key can't destroy history; the target test checks that.
+- **Live job logs** use RoushTech.Asio. Each `BackupJob` has a `LogSessionId`; `JobLogs` (central) opens the
+  session and runs the scheduler's work for a job inside it, so `ILogger` lines (repository setup, restic's
+  stderr as `ResticRunner` reads it, dispatch) land there. Agents activate the session the job carries and
+  every `OutputLog` line plus progress every 10s is logged; Asio forwarding sends them through
+  `CentralLogTransport` to `POST /api/v0/agent/jobs/log`, which only accepts a session belonging to a job on
+  the calling node. Browsers watch `/hubs/job-log` (in memory, 2000 lines per job, 300 jobs). Only `Track.*`
+  categories at Information and above reach a session. Requests never wait on the scheduler: they call
+  `BackupRuntimeState.WakeScheduler()`, and repository setup gives up after 2 minutes.
 - The Backups page reloads on the hub's `backups` event (`snapshotStore.backupsVersion`).
 
 ## Multi-Node / Swarm Configuration
