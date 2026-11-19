@@ -316,8 +316,7 @@ const canSavePassword = () =>
       :error="deleteError"
       @confirm="confirmDelete"
     >
-      Delete <strong>{{ deleteTarget?.username }}</strong
-      >? This cannot be undone.
+      Delete <strong>{{ deleteTarget?.username }}</strong>? This cannot be undone.
     </ConfirmDialog>
   </div>
 </template>

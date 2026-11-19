@@ -21,6 +21,7 @@ improvements, bug fixes, and new features by version.
 
 #### Changes
  - Anonymous volumes are no longer backed up, and a database keeping its data in one is flagged
+ - Updated the SQLite driver, OpenAPI library and frontend packages to versions without known security issues
 
 #### Bug Fixes
  - The Agents page no longer switches role and backup approval to numbers after the first live update

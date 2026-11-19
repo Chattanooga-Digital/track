@@ -393,8 +393,7 @@ async function saveBuckets() {
       :error="deleteError"
       @confirm="confirmDelete"
     >
-      Delete <strong>{{ deleteTarget?.name }}</strong
-      >? Its stacks and buckets become unassigned.
+      Delete <strong>{{ deleteTarget?.name }}</strong>? Its stacks and buckets become unassigned.
     </ConfirmDialog>
   </div>
 </template>

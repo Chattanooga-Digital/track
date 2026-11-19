@@ -354,8 +354,7 @@ const canSave = () =>
       :error="deleteError"
       @confirm="confirmDelete"
     >
-      Delete <strong>{{ deleteTarget?.name }}</strong
-      >? Its buckets lose their assignments.
+      Delete <strong>{{ deleteTarget?.name }}</strong>? Its buckets lose their assignments.
     </ConfirmDialog>
   </div>
 </template>

@@ -213,8 +213,7 @@ const onlineCount = computed(() => nodes.value.filter((n) => n.online).length)
       @update:model-value="deleteTarget = null"
       @confirm="confirmDelete"
     >
-      Delete <strong>{{ deleteTarget }}</strong
-      >? It comes back if it reports again.
+      Delete <strong>{{ deleteTarget }}</strong>? It comes back if it reports again.
     </ConfirmDialog>
   </div>
 </template>
