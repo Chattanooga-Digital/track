@@ -40,7 +40,7 @@ public class AgentJobsController(
             return NotFound();
 
         ResticTarget? restic = null;
-        if (job.Kind is BackupJobKind.Backup or BackupJobKind.Restore)
+        if (BackupScheduler.IsHeavy(job.Kind))
         {
             var target = await TrackContext.BackupTargets.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
             try
@@ -83,7 +83,8 @@ public class AgentJobsController(
             parameters.RestoreDelete,
             parameters.StopContainers,
             parameters.Scale ?? [],
-            settings.HookTimeoutMinutes * 60));
+            settings.HookTimeoutMinutes * 60,
+            parameters.Dump));
     }
 
     [HttpPost("{id:long}/progress")]
@@ -124,6 +125,7 @@ public class AgentJobsController(
         job.FilesNew = result.FilesNew;
         job.FilesChanged = result.FilesChanged;
         job.OutputTail = result.Output;
+        job.Summary = result.Summary;
         if (result.Succeeded)
             job.PercentDone = 1;
 
@@ -143,6 +145,7 @@ public class AgentJobsController(
                 StackName = job.StackName,
                 Images = string.Join(',', parameters.Images ?? []),
                 Paths = string.Join(',', parameters.Paths ?? []),
+                DumpEngine = parameters.Dump?.Engine,
                 BytesAdded = result.BytesAdded,
                 TotalBytes = result.TotalBytes,
                 PreRestore = parameters.Tags?.Contains(BackupSnapshot.PreRestoreTag) == true,

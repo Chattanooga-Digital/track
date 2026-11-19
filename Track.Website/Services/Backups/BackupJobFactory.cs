@@ -68,11 +68,39 @@ public sealed class BackupJobFactory(TrackContext context)
         return job;
     }
 
+    public BackupJob QueueVerify(BackupSnapshot snapshot, string image, string nodeName, string? requestedBy)
+    {
+        var job = new BackupJob
+        {
+            Kind = BackupJobKind.Verify,
+            Status = BackupJobStatus.Queued,
+            Trigger = BackupTrigger.Manual,
+            VolumeKey = snapshot.VolumeKey,
+            VolumeName = snapshot.VolumeName,
+            NodeName = nodeName,
+            RepositoryKey = snapshot.RepositoryKey,
+            StackName = snapshot.StackName,
+            QueuedAt = DateTime.UtcNow,
+            RequestedBy = requestedBy,
+            ParametersJson = new JobParameters
+            {
+                SnapshotId = snapshot.SnapshotId,
+                SnapshotPath = SnapshotPath(snapshot),
+                Dump = new DatabaseDump(snapshot.DumpEngine!.Value, null, image),
+            }.Serialize(),
+        };
+        _context.BackupJobs.Add(job);
+        return job;
+    }
+
     public async Task<BackupJob> QueueReplaceAsync(
         BackupVolumeState state, BackupSnapshot snapshot, SwarmReport? swarm, string? managerNode, string? requestedBy,
         CancellationToken cancellationToken)
     {
         await EnsureRepositoryAsync(state, cancellationToken);
+        if (snapshot.DumpEngine is not null)
+            return QueueImport(state, snapshot, swarm, managerNode, requestedBy);
+
         var volume = state.Volume;
         var node = volume.NodeName!;
         var services = swarm?.Services.Where(s => s.Volumes.Contains(volume.VolumeName)).ToList() ?? [];
@@ -117,6 +145,50 @@ public sealed class BackupJobFactory(TrackContext context)
         return parent;
     }
 
+    private BackupJob QueueImport(
+        BackupVolumeState state, BackupSnapshot snapshot, SwarmReport? swarm, string? managerNode, string? requestedBy)
+    {
+        var volume = state.Volume;
+        var node = volume.NodeName!;
+        var others = BackupCatalogService.StackServicesToStop(volume, swarm);
+        var dump = new DatabaseDump(snapshot.DumpEngine!.Value, volume.DatabaseService, volume.DatabaseImage);
+
+        var steps = new List<ReplaceStep>
+        {
+            new("Dump current database", BackupJobKind.Backup, node, state.RepositoryKey,
+                DumpParameters(state, preRestore: true, dump)),
+        };
+        if (others.Count > 0)
+        {
+            steps.Add(new ReplaceStep("Stop the rest of the stack", BackupJobKind.Scale, managerNode, null,
+                new JobParameters { Scale = [.. others.Select(s => new ServiceReplicas(s.Name, 0))] }, ScalesDown: true));
+        }
+        steps.Add(new ReplaceStep("Import", BackupJobKind.Import, node, snapshot.RepositoryKey, new JobParameters
+        {
+            SnapshotId = snapshot.SnapshotId,
+            SnapshotPath = SnapshotPath(snapshot),
+            Dump = dump,
+            // A database outside Swarm has stack-mates outside it too, which only its own agent can stop.
+            StopContainers = swarm?.Services.Any(s => s.Volumes.Contains(volume.VolumeName)) != true,
+        }));
+        if (others.Count > 0)
+        {
+            steps.Add(new ReplaceStep("Start the rest of the stack", BackupJobKind.Scale, managerNode, null,
+                new JobParameters { Scale = [.. others.Select(s => new ServiceReplicas(s.Name, s.Replicas ?? 1))] }));
+        }
+
+        var parent = NewJob(BackupJobKind.Replace, BackupTrigger.Restore, state, node, snapshot.RepositoryKey, new JobParameters
+        {
+            SnapshotId = snapshot.SnapshotId,
+            Steps = steps,
+        });
+        parent.Status = BackupJobStatus.Running;
+        parent.StartedAt = parent.QueuedAt;
+        parent.RequestedBy = requestedBy;
+        _context.BackupJobs.Add(parent);
+        return parent;
+    }
+
     public BackupJob StepJob(BackupJob parent, ReplaceStep step, int index) => new()
     {
         Kind = step.Kind,
@@ -134,26 +206,48 @@ public sealed class BackupJobFactory(TrackContext context)
         ParametersJson = step.Parameters.Serialize(),
     };
 
-    public static string SnapshotPath(BackupSnapshot snapshot) => $"/data/{snapshot.VolumeName}";
+    public static string SnapshotPath(BackupSnapshot snapshot) => snapshot.DumpEngine is null
+        ? $"/data/{snapshot.VolumeName}"
+        : DumpPath(snapshot.VolumeName);
+
+    public static string DumpPath(string volumeName) => $"/data/{volumeName}/{DatabaseDumps.FileName}";
 
     private static JobParameters BackupParameters(BackupVolumeState state, bool preRestore)
     {
         var volume = state.Volume;
-        var tags = new List<string> { preRestore ? BackupSnapshot.PreRestoreTag : BackupSnapshot.Tag };
-        if (volume.StackName is not null)
-            tags.Add($"stack={volume.StackName}");
-        if (volume.NodeName is not null)
-            tags.Add($"node={volume.NodeName}");
+        if (volume.Method == BackupMethod.Dump)
+            return DumpParameters(state, preRestore, new DatabaseDump(volume.Engine!.Value, volume.DatabaseService, volume.DatabaseImage));
 
         return new JobParameters
         {
             Host = volume.Key,
             Paths = volume.Paths,
-            Tags = tags,
+            Tags = Tags(volume, preRestore),
             PreHooks = volume.PreHooks,
             PostHooks = volume.PostHooks,
             Images = volume.Images,
         };
+    }
+
+    private static JobParameters DumpParameters(BackupVolumeState state, bool preRestore, DatabaseDump dump) => new()
+    {
+        Host = state.Volume.Key,
+        Paths = [],
+        Tags = [.. Tags(state.Volume, preRestore), BackupSnapshot.DumpTagPrefix + DatabaseDumps.Tag(dump.Engine)],
+        PreHooks = [],
+        PostHooks = [],
+        Images = state.Volume.Images,
+        Dump = dump,
+    };
+
+    private static List<string> Tags(CatalogVolume volume, bool preRestore)
+    {
+        var tags = new List<string> { preRestore ? BackupSnapshot.PreRestoreTag : BackupSnapshot.Tag };
+        if (volume.StackName is not null)
+            tags.Add($"stack={volume.StackName}");
+        if (volume.NodeName is not null)
+            tags.Add($"node={volume.NodeName}");
+        return tags;
     }
 
     private static BackupJob NewJob(

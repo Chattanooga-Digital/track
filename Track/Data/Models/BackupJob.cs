@@ -41,6 +41,10 @@ public class BackupJob : IEntityTypeConfiguration<BackupJob>
     public long? FilesChanged { get; set; }
 
     public string? Error { get; set; }
+
+    /// <summary>What a verify or import found, such as how many databases and tables arrived.</summary>
+    public string? Summary { get; set; }
+
     public string? OutputTail { get; set; }
     public bool CancelRequested { get; set; }
     public string? RequestedBy { get; set; }
@@ -56,6 +60,7 @@ public class BackupJob : IEntityTypeConfiguration<BackupJob>
         builder.Property(j => j.StackName).HasMaxLength(200);
         builder.Property(j => j.SnapshotId).HasMaxLength(64);
         builder.Property(j => j.RequestedBy).HasMaxLength(256);
+        builder.Property(j => j.Summary).HasMaxLength(500);
         builder.HasIndex(j => j.Status);
         builder.HasIndex(j => new { j.VolumeKey, j.QueuedAt });
         builder.HasIndex(j => j.ParentJobId);

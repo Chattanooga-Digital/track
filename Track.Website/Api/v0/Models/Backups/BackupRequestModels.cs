@@ -9,10 +9,26 @@ public class VolumeKeyModel
 
 public class VolumeOverrideModel
 {
+    public List<string> VolumeNames { get; set; } = [];
+
+    /// <summary>True ignores, false backs up despite the labels or being empty, null hands the choice back.</summary>
+    public bool? Excluded { get; set; }
+}
+
+public class VolumeMethodModel
+{
     public required string VolumeName { get; set; }
 
-    /// <summary>True excludes, false includes despite the labels, null hands the choice back to the labels.</summary>
-    public bool? Excluded { get; set; }
+    /// <summary>Null hands the choice back to the labels and the detected database.</summary>
+    public BackupMethod? Method { get; set; }
+}
+
+public class VolumeTestModel
+{
+    public required string Key { get; set; }
+
+    /// <summary>The snapshot to test; the latest dump when left out.</summary>
+    public long? SnapshotId { get; set; }
 }
 
 public class RestoreRequestModel

@@ -72,7 +72,8 @@ public sealed class HookRunner
         return result.ExitCode == 0 ? null : $"The {hook.ServiceName} hook exited with code {result.ExitCode}";
     }
 
-    private static async Task<string?> FindContainerAsync(
+    /// <summary>A running container of <paramref name="serviceName"/> that mounts the volume, waiting for one when asked.</summary>
+    public static async Task<string?> FindContainerAsync(
         DockerClient client, string volumeName, string serviceName, bool wait, CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow + (wait ? WaitForContainer : TimeSpan.Zero);

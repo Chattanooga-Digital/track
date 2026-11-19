@@ -13,6 +13,14 @@ improvements, bug fixes, and new features by version.
  - Old snapshots are pruned weekly and part of each repository is verified monthly; an optional heartbeat URL is pinged while backups are healthy
  - Agents must be approved on the Agents page before they run backups, and each node's role is shown
  - Billing shows each customer's backup storage, with its own per-GB rate
+ - Postgres, MariaDB and MySQL databases are dumped automatically instead of copied, with no labels needed, and you can switch any database between dumping and copying files
+ - Test restore imports a database dump into a throwaway container and reports the databases and tables that came back
+ - Browse any snapshot's folders and download a single file or folder
+ - Replace live data from a database dump imports it into the running database, stopping the rest of the stack meanwhile
+ - Ignore volumes in bulk; ignored and empty volumes move to their own Ignored tab, and empty ones come back once they hold data
+
+#### Changes
+ - Anonymous volumes are no longer backed up, and a database keeping its data in one is flagged
 
 #### Bug Fixes
  - The Agents page no longer switches role and backup approval to numbers after the first live update

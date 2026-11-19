@@ -240,6 +240,10 @@ namespace Track.Data.Migrations
                     b.Property<int>("Step")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Summary")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Trigger")
                         .HasColumnType("INTEGER");
 
@@ -379,6 +383,9 @@ namespace Track.Data.Migrations
                     b.Property<long?>("BytesAdded")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("DumpEngine")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Images")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
@@ -498,7 +505,10 @@ namespace Track.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<bool>("Excluded")
+                    b.Property<bool?>("Excluded")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Method")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("UpdatedAt")

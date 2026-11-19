@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text.Json;
+using Track.Enums;
 using Track.Data;
 using Track.Data.Models;
 using Track.Services.Backups;
@@ -48,16 +50,23 @@ public sealed class SnapshotIndex(TrackContext context, ResticRunner restic)
                 continue;
 
             var prefix = $"/data/{volume}/";
+            var dumpEngine = Tag(tags, BackupSnapshot.DumpTagPrefix) is { } engine
+                && Enum.TryParse<DatabaseEngine>(engine, ignoreCase: true, out var parsed)
+                    ? parsed
+                    : (DatabaseEngine?)null;
             snapshots[id] = new BackupSnapshot
             {
                 SnapshotId = id,
                 RepositoryKey = "",
                 VolumeKey = element.TryGetProperty("hostname", out var host) ? host.GetString() ?? volume : volume,
                 VolumeName = volume,
-                Time = element.GetProperty("time").GetDateTime().ToUniversalTime(),
+                Time = ParseTime(element.GetProperty("time").GetString()) ?? DateTime.UtcNow,
                 NodeName = Tag(tags, "node="),
                 StackName = Tag(tags, "stack="),
-                Paths = string.Join(',', paths.Where(path => path.StartsWith(prefix, StringComparison.Ordinal)).Select(path => path[prefix.Length..])),
+                Paths = dumpEngine is not null
+                    ? ""
+                    : string.Join(',', paths.Where(path => path.StartsWith(prefix, StringComparison.Ordinal)).Select(path => path[prefix.Length..])),
+                DumpEngine = dumpEngine,
                 PreRestore = tags.Contains(BackupSnapshot.PreRestoreTag),
                 TotalBytes = element.TryGetProperty("summary", out var summary) && summary.TryGetProperty("total_bytes_processed", out var bytes)
                     ? bytes.GetInt64()
@@ -67,6 +76,12 @@ public sealed class SnapshotIndex(TrackContext context, ResticRunner restic)
 
         return snapshots;
     }
+
+    /// <summary>restic writes nanoseconds, which is more precision than the JSON reader accepts.</summary>
+    public static DateTime? ParseTime(string? value) =>
+        DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
+            ? parsed.UtcDateTime
+            : null;
 
     private static string? VolumeOf(string path)
     {

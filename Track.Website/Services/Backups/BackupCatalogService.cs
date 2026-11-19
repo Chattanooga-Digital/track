@@ -21,12 +21,14 @@ public sealed record BackupVolumeState(
     BackupJob? ActiveJob,
     BackupJob? LastJob,
     bool NodeOnline,
-    string? ReplaceBlockedReason)
+    string? ReplaceBlockedReason,
+    string? DumpReplaceBlockedReason = null,
+    BackupJob? LastTest = null)
 {
     public bool NeedsAttention =>
         Status is BackupVolumeStatus.Stale or BackupVolumeStatus.Failed
             or BackupVolumeStatus.StaleCopy or BackupVolumeStatus.Ambiguous or BackupVolumeStatus.NodeOffline
-        || (Volume.Protected && Volume.DatabaseWithoutHook);
+        || (Volume.Protected && Volume.DatabaseWithoutDump);
 }
 
 public sealed record BackupCatalogResult(
@@ -35,7 +37,8 @@ public sealed record BackupCatalogResult(
     BackupTarget? Target,
     bool MasterKeySet,
     SwarmReport? Swarm,
-    IReadOnlySet<string> ReadyNodes)
+    IReadOnlySet<string> ReadyNodes,
+    List<AnonymousDatabase> AnonymousDatabases)
 {
     public bool Configured => Target is not null && MasterKeySet;
 }
@@ -74,15 +77,16 @@ public sealed class BackupCatalogService(
         var swarm = _swarmInventory.Get(now);
 
         var overrides = await _context.BackupVolumeOverrides.AsNoTracking()
-            .ToDictionaryAsync(o => o.VolumeName, o => o.Excluded, cancellationToken);
+            .ToDictionaryAsync(o => o.VolumeName, o => new VolumeOverride(o.Excluded, o.Method), cancellationToken);
 
         // Only approved agents decide what exists where: their reports choose which commands run on which node.
-        var catalog = BackupCatalog.Build(new CatalogInputs(
+        var inputs = new CatalogInputs(
             volumesByNode.Where(e => _enrollment.IsApproved(e.Key)).ToDictionary(),
             mountsByNode.Where(e => ready.Contains(e.Key)).ToDictionary(),
             swarm is not null && _enrollment.IsApproved(swarm.NodeName) ? swarm : null,
             overrides,
-            new HashSet<string> { _options.Backups.CacheVolume }));
+            new HashSet<string> { _options.Backups.CacheVolume });
+        var catalog = BackupCatalog.Build(inputs);
 
         var settings = await SettingsAsync(cancellationToken);
         var target = await _context.BackupTargets.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
@@ -102,11 +106,22 @@ public sealed class BackupCatalogService(
 
         var since = now - JobHistory;
         var jobs = await _context.BackupJobs.AsNoTracking()
-            .Where(j => (j.Kind == BackupJobKind.Backup || j.Kind == BackupJobKind.Restore) && j.VolumeKey != null
+            .Where(j => (j.Kind == BackupJobKind.Backup || j.Kind == BackupJobKind.Restore
+                    || j.Kind == BackupJobKind.Import || j.Kind == BackupJobKind.Verify) && j.VolumeKey != null
                 && (j.QueuedAt >= since || j.Status == BackupJobStatus.Queued || j.Status == BackupJobStatus.Dispatched || j.Status == BackupJobStatus.Running))
             .OrderByDescending(j => j.QueuedAt)
             .ToListAsync(cancellationToken);
         var jobsByKey = jobs.GroupBy(j => j.VolumeKey!).ToDictionary(g => g.Key, g => g.ToList());
+
+        var lastTestIds = await _context.BackupJobs.AsNoTracking()
+            .Where(j => j.Kind == BackupJobKind.Verify && j.VolumeKey != null
+                && (j.Status == BackupJobStatus.Succeeded || j.Status == BackupJobStatus.Failed))
+            .GroupBy(j => j.VolumeKey!)
+            .Select(g => g.Max(j => j.Id))
+            .ToListAsync(cancellationToken);
+        var lastTests = await _context.BackupJobs.AsNoTracking()
+            .Where(j => lastTestIds.Contains(j.Id))
+            .ToDictionaryAsync(j => j.VolumeKey!, cancellationToken);
 
         var states = catalog.Select(volume =>
         {
@@ -134,10 +149,13 @@ public sealed class BackupCatalogService(
                 active,
                 last,
                 nodeOnline,
-                ReplaceBlockedReason(volume, swarm, ready, roles));
+                ReplaceBlockedReason(volume, swarm, ready, roles),
+                DumpReplaceBlockedReason(volume, swarm, ready),
+                lastTests.GetValueOrDefault(volume.Key));
         }).ToList();
 
-        return new BackupCatalogResult(states, settings, target, _masterKey.Value is not null, swarm, ready);
+        return new BackupCatalogResult(states, settings, target, _masterKey.Value is not null, swarm, ready,
+            BackupCatalog.AnonymousDatabases(inputs));
     }
 
     private static BackupVolumeStatus Status(
@@ -161,6 +179,32 @@ public sealed class BackupCatalogService(
             return BackupVolumeStatus.Never;
         return now - lastGood > TimeSpan.FromHours(settings.StaleAfterHours) ? BackupVolumeStatus.Stale : BackupVolumeStatus.Ok;
     }
+
+    /// <summary>Why a dump can't be imported into this volume's database now: it needs the database running and the rest of its stack stoppable.</summary>
+    public static string? DumpReplaceBlockedReason(CatalogVolume volume, SwarmReport? swarm, IReadOnlySet<string> readyNodes)
+    {
+        if (volume.Kind != CatalogVolumeKind.Single || volume.NodeName is null)
+            return "Only a volume with one live copy can be replaced";
+        if (!readyNodes.Contains(volume.NodeName))
+            return $"{volume.NodeName} is offline or not approved";
+        if (volume.Engine is null || volume.DatabaseService is null)
+            return "No database Track can import into is using this volume";
+        if (!volume.Running)
+            return $"{volume.DatabaseService} isn't running";
+
+        var others = StackServicesToStop(volume, swarm);
+        if (others.Count > 0 && !readyNodes.Any(node => swarm!.Nodes.Any(n => n.Hostname == node && n.Role == "manager")))
+            return "No approved manager agent is online";
+        return others.FirstOrDefault(s => s.Global) is { } global
+            ? $"{global.Name} is a global service, so it can't be stopped during the import"
+            : null;
+    }
+
+    /// <summary>The rest of a database's stack, which must not write to it while a dump is imported.</summary>
+    public static List<SwarmServiceInfo> StackServicesToStop(CatalogVolume volume, SwarmReport? swarm) =>
+        volume.StackName is null || swarm is null
+            ? []
+            : [.. swarm.Services.Where(s => s.StackName == volume.StackName && !s.Volumes.Contains(volume.VolumeName))];
 
     public static string? ReplaceBlockedReason(
         CatalogVolume volume, SwarmReport? swarm, IReadOnlySet<string> readyNodes, IReadOnlyDictionary<string, NodeRole> roles)

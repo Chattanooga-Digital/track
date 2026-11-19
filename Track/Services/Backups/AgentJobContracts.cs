@@ -25,6 +25,9 @@ public sealed record AgentHook(string ServiceName, string Command);
 
 public sealed record ServiceReplicas(string ServiceName, ulong Replicas);
 
+/// <summary>Which database to dump or import into: a running service's container, or a throwaway one from <see cref="Image"/>.</summary>
+public sealed record DatabaseDump(DatabaseEngine Engine, string? ServiceName, string? Image);
+
 /// <summary>One job as an agent runs it. Which fields matter depends on <see cref="Kind"/>.</summary>
 public sealed record AgentJob(
     long Id,
@@ -43,7 +46,8 @@ public sealed record AgentJob(
     bool RestoreDelete,
     bool StopContainers,
     List<ServiceReplicas> Scale,
-    int HookTimeoutSeconds);
+    int HookTimeoutSeconds,
+    DatabaseDump? Dump = null);
 
 public sealed record AgentJobProgress(double? PercentDone, long? BytesDone, long? BytesTotal);
 
@@ -58,4 +62,5 @@ public sealed record AgentJobResult(
     long? FilesNew,
     long? FilesChanged,
     long? TotalBytes,
-    string? Output);
+    string? Output,
+    string? Summary = null);

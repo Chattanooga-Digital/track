@@ -27,6 +27,7 @@ public sealed record JobParameters
     public bool RestoreDelete { get; init; }
     public bool StopContainers { get; init; }
     public List<ServiceReplicas>? Scale { get; init; }
+    public DatabaseDump? Dump { get; init; }
 
     /// <summary>For a Replace parent: the steps, run in order, each as a child job.</summary>
     public List<ReplaceStep>? Steps { get; init; }

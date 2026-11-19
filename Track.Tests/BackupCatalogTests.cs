@@ -1,3 +1,4 @@
+using Track.Enums;
 using Track.Services;
 using Track.Services.Backups;
 using Track.Services.Ingest;
@@ -9,12 +10,19 @@ public class BackupCatalogTests
     private static VolumeMount Mount(string volume, string service, string image = "app:1", Dictionary<string, string>? labels = null) =>
         new(volume, $"{service}-id", $"{service}.1", "app", service, image, labels ?? []);
 
+    private static CatalogInputs Inputs(
+        Dictionary<string, List<NodeVolume>> volumes,
+        Dictionary<string, List<VolumeMount>> mounts,
+        SwarmReport? swarm = null,
+        Dictionary<string, VolumeOverride>? overrides = null) =>
+        new(volumes, mounts, swarm, overrides ?? [], new HashSet<string> { "track-restic-cache" });
+
     private static List<CatalogVolume> Build(
         Dictionary<string, List<NodeVolume>> volumes,
         Dictionary<string, List<VolumeMount>> mounts,
         SwarmReport? swarm = null,
-        Dictionary<string, bool>? overrides = null) =>
-        BackupCatalog.Build(new CatalogInputs(volumes, mounts, swarm, overrides ?? [], new HashSet<string> { "track-restic-cache" }));
+        Dictionary<string, VolumeOverride>? overrides = null) =>
+        BackupCatalog.Build(Inputs(volumes, mounts, swarm, overrides));
 
     [Test]
     public void Build_BacksUpTheCopyInUseAndFlagsLeftovers()
@@ -33,12 +41,12 @@ public class BackupCatalogTests
             ("app_db@node-2", (string?)"node-2", CatalogVolumeKind.StaleCopy),
         }));
         Assert.That(catalog[0].Protected, Is.True);
-        Assert.That(catalog[0].DatabaseWithoutHook, Is.True);
+        Assert.That(catalog[0].Method, Is.EqualTo(BackupMethod.Dump));
         Assert.That(catalog[1].Protected, Is.False);
     }
 
     [Test]
-    public void Build_FlagsOnlyADatabasesDataDirectory()
+    public void Build_DumpsOnlyADatabasesDataDirectory()
     {
         var catalog = Build(
             new() { ["node-1"] = [new NodeVolume("app_db", "app", 1), new NodeVolume("app_dbinit", "app", 1)] },
@@ -51,8 +59,68 @@ public class BackupCatalogTests
                 ],
             });
 
-        Assert.That(catalog.Single(v => v.VolumeName == "app_db").DatabaseWithoutHook, Is.True);
-        Assert.That(catalog.Single(v => v.VolumeName == "app_dbinit").DatabaseWithoutHook, Is.False);
+        var data = catalog.Single(v => v.VolumeName == "app_db");
+        var init = catalog.Single(v => v.VolumeName == "app_dbinit");
+        Assert.That((data.Method, data.Engine, data.DatabaseService), Is.EqualTo((BackupMethod.Dump, (DatabaseEngine?)DatabaseEngine.MariaDb, (string?)"app_db")));
+        Assert.That((init.Method, init.DatabaseWithoutDump), Is.EqualTo((BackupMethod.Files, false)));
+    }
+
+    [Test]
+    public void Build_FlagsADatabaseItCantDump()
+    {
+        var catalog = Build(
+            new() { ["node-1"] = [new NodeVolume("app_mongo", "app", 1), new NodeVolume("app_pg", "app", 1)] },
+            new()
+            {
+                ["node-1"] =
+                [
+                    Mount("app_mongo", "app_mongo", "mongo:7") with { Destination = "/data/db" },
+                    Mount("app_pg", "app_pg", "postgres:17") with { Destination = "/var/lib/postgresql/data" },
+                ],
+            },
+            overrides: new() { ["app_pg"] = new VolumeOverride(null, BackupMethod.Files) });
+
+        Assert.That(catalog.Single(v => v.VolumeName == "app_mongo").DatabaseWithoutDump, Is.True);
+        Assert.That(catalog.Single(v => v.VolumeName == "app_pg").DatabaseWithoutDump, Is.True);
+    }
+
+    [Test]
+    public void Build_IgnoresEmptyVolumesUntilTheyHoldData()
+    {
+        var catalog = Build(
+            new()
+            {
+                ["node-1"] =
+                [
+                    new NodeVolume("app_empty", "app", 0),
+                    new NodeVolume("app_kept", "app", 0),
+                ],
+            },
+            new() { ["node-1"] = [Mount("app_empty", "app"), Mount("app_kept", "app"), Mount("app_unmeasured", "app")] },
+            overrides: new() { ["app_kept"] = new VolumeOverride(false, null) });
+
+        Assert.That(catalog.Single(v => v.VolumeName == "app_empty").ExcludedBy, Is.EqualTo(ExclusionSource.Empty));
+        Assert.That(catalog.Single(v => v.VolumeName == "app_kept").Protected, Is.True);
+        Assert.That(catalog.Single(v => v.VolumeName == "app_unmeasured").Protected, Is.True);
+    }
+
+    [Test]
+    public void Build_SkipsAnonymousVolumesAndWarnsWhenADatabaseUsesOne()
+    {
+        var anonymous = new string('b', 64);
+        var inputs = Inputs(
+            new() { ["node-1"] = [new NodeVolume(anonymous, null, 10), new NodeVolume("app_cache", "app", 10)] },
+            new()
+            {
+                ["node-1"] =
+                [
+                    Mount(anonymous, "app_db", "postgres:18") with { Destination = "/var/lib/postgresql" },
+                    Mount("app_cache", "app_redis", "redis:7") with { Destination = "/data" },
+                ],
+            });
+
+        Assert.That(BackupCatalog.Build(inputs).Select(v => v.Key), Is.EqualTo(new[] { "app_cache" }));
+        Assert.That(BackupCatalog.AnonymousDatabases(inputs), Is.EqualTo(new[] { new AnonymousDatabase("node-1", "app_db", "app") }));
     }
 
     [Test]
@@ -140,13 +208,13 @@ public class BackupCatalogTests
 
         Assert.That(db.PreHooks, Is.EqualTo(new[] { new AgentHook("app_db", "/pg_backup.sh backup") }));
         Assert.That(db.RestorePostHooks.Single().Command, Is.EqualTo("/pg_backup.sh restore"));
-        Assert.That(db.DatabaseWithoutHook, Is.False);
+        Assert.That((db.Method, db.DatabaseWithoutDump), Is.EqualTo((BackupMethod.Files, false)));
         Assert.That(cache.ExcludedBy, Is.EqualTo(ExclusionSource.Label));
 
         var overridden = Build(volumes, mounts, swarm with
         {
             Services = [swarm.Services[0] with { Volumes = ["app_db", "app_cache"] }],
-        }, new() { ["app_cache"] = false, ["app_db"] = true });
+        }, new() { ["app_cache"] = new VolumeOverride(false, null), ["app_db"] = new VolumeOverride(true, null) });
         Assert.That(overridden.Single(v => v.Key == "app_cache").Excluded, Is.False);
         Assert.That(overridden.Single(v => v.Key == "app_db").ExcludedBy, Is.EqualTo(ExclusionSource.Track));
     }

@@ -242,8 +242,8 @@ then flows through the normal stack → customer assignment unchanged.
 ## Backups
 
 Every volume is backed up nightly with **restic** to one off-site S3 bucket, unless a label or Track
-excludes it. Track decides which volumes, when and where; each stack's labels say how to dump its
-data; restic does chunking, dedupe, encryption and upload. Backup data goes node → S3 directly, never
+excludes it. Track decides which volumes, when and where, and dumps the databases it knows; restic does
+chunking, dedupe, encryption and upload. Backup data goes node → S3 directly, never
 through the central.
 
 - **Agent approval.** Each agent keeps a random token at `Track:AgentTokenPath` (`/app/data/agent-token`;
@@ -258,12 +258,32 @@ through the central.
   constraints and service labels, which only a manager's engine can list. `BackupCatalog.Build` (pure,
   tested) turns that into one entry per copy that matters: `Single` (the copy a running container
   uses), `PerNode` (a global service, or mounted on several nodes: key `volume@node`), `StaleCopy`
-  (leftover on a node that doesn't use it, not backed up) and `Ambiguous`. Dangling anonymous volumes,
-  restore volumes and the restic cache volume are skipped.
+  (leftover on a node that doesn't use it, not backed up) and `Ambiguous`. Anonymous volumes (a
+  redeploy replaces them, so there's nothing to restore into), restore volumes and the restic cache
+  volume are skipped. `BackupCatalog.AnonymousDatabases` warns when a database keeps its data in one.
+- **Ignoring.** A volume is ignored (`ExclusionSource`) by a Track override, a label, or by Docker measuring
+  it at 0 bytes (`Empty`), which lifts on its own once it holds data; an unknown size never counts as
+  empty. Ignored volumes sit on the page's Ignored tab. `PUT /backups/volumes/override` takes several
+  volume names for bulk ignore or include.
 - **Labels** use backup-bot-two's names (`BackupLabels`): `backupbot.backup: "false"`,
   `backupbot.backup.volumes.<name>: "false"` and `.path`, `backupbot.backup.pre-hook|post-hook`,
   `backupbot.restore.pre-hook|post-hook`. `<name>` may be the full volume name or the compose key.
-  `BackupVolumeOverride` rows (UI) win over labels. A database image with no pre-hook is flagged.
+  `BackupVolumeOverride` rows (UI) win over labels: `Excluded` and `Method`, null meaning "not overridden".
+- **Database dumps** (`DatabaseDumps`). A volume mounted at a known data path by an official
+  `postgres`/`postgis`/`timescaledb`, `mariadb` or `mysql`/`percona` image is dumped instead of copied:
+  Track's choice (`Method`), then a label pre-hook (files), then the detected engine. The commands are
+  fixed per engine and name credentials by variable (`POSTGRES_USER`, `MARIADB_ROOT_PASSWORD`, the `_FILE`
+  variants), so values never leave the container. The agent streams `pg_dumpall --clean --if-exists` or
+  `mariadb-dump --databases <non-system> --add-drop-database` through `docker exec` into the helper's
+  stdin; restic runs `--stdin-from-command` reading `/proc/1/fd/0` and saves the snapshot only if the agent
+  touched a marker after the dump exited 0, so a failed dump or a dead agent leaves no partial snapshot.
+  The snapshot holds `/data/<volume>/database.sql`, tagged `dump=<engine>` (`BackupSnapshot.DumpEngine`).
+  Databases Track can't dump (Bitnami, Mongo) or set to copy files without a hook are flagged.
+- **Test restore** (`Verify` job, agent): pulls the snapshot's image if needed, starts it with a random
+  password, no network and a 1 GB limit (labelled `digital.chattanooga.track.backup.scratch`), waits for
+  TCP readiness (the entrypoint's setup server is socket-only), streams `restic dump` into the import
+  command, counts databases and tables, and removes it. The result is `BackupJob.Summary`; the latest per
+  volume is shown on the page.
 - **Repositories.** One restic repo per owner under the target prefix: `customer-{id}`, `shared`,
   `unassigned` (`BackupRepository`). Passwords are never stored: `RepoPasswordDeriver` is
   HMAC-SHA256(master key, repo key), base64, matching
@@ -289,7 +309,14 @@ through the central.
   scale back, restore post-hook). Non-swarm containers are stopped and started by the node's agent.
   `BackupCatalogService.ReplaceBlockedReason` refuses unless the service's placement resolves to the
   volume's node alone. Safety snapshots are tagged `track-pre-restore` so they never take a day's
-  retention slot; regular ones are tagged `track`.
+  retention slot; regular ones are tagged `track`. A dump snapshot instead replaces by **import**: a
+  safety dump, the rest of its stack scaled to 0 (Swarm) or stopped by the agent (otherwise), then an
+  `Import` job that streams the dump into the running database, then the stack back
+  (`DumpReplaceBlockedReason`). Postgres connections are terminated first; the import's only expected
+  errors are the dump recreating the connected superuser (`IsHarmlessImportError`).
+- **Browse.** `GET /backups/snapshots/{id}/files?path=` runs `restic ls` on the central for one folder;
+  `/download?path=&directory=` streams one file, or a folder as tar. Paths are relative to the volume
+  and may not contain `.` or `..`.
 - **Maintenance** (`BackupMaintenance`, central, every minute when due): weekly `forget` per
   `KeepDaily/Weekly/Monthly` grouped by host, pre-restore snapshots kept 30 days, `prune`, repo size
   from `restic stats` (billed per customer as backup storage), snapshot index resync, and a monthly

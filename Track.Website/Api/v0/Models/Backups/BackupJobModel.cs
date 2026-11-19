@@ -25,6 +25,7 @@ public class BackupJobModel
     public long? FilesChanged { get; set; }
     public string? SnapshotId { get; set; }
     public string? Error { get; set; }
+    public string? Summary { get; set; }
     public string? RequestedBy { get; set; }
     public bool CancelRequested { get; set; }
     public string? Output { get; set; }

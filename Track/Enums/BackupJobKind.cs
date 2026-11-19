@@ -22,4 +22,10 @@ public enum BackupJobKind
 
     /// <summary>Central: the parent of the steps that replace a volume's live data.</summary>
     Replace = 6,
+
+    /// <summary>Agent: stream a dump snapshot into the running database.</summary>
+    Import = 7,
+
+    /// <summary>Agent: import a dump snapshot into a throwaway container of the same image and count what arrived.</summary>
+    Verify = 8,
 }

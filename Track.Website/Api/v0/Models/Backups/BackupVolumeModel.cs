@@ -21,7 +21,16 @@ public class BackupVolumeModel
 
     public bool HasHooks { get; set; }
     public bool HasRestoreHooks { get; set; }
-    public bool DatabaseWithoutHook { get; set; }
+    public bool DatabaseWithoutDump { get; set; }
+    public BackupMethod Method { get; set; }
+
+    /// <summary>Track's choice of method; null when the labels and the detected database decide.</summary>
+    public BackupMethod? MethodOverride { get; set; }
+
+    /// <summary>The database Track can dump from this volume, if any.</summary>
+    public DatabaseEngine? Engine { get; set; }
+
+    public BackupTestModel? LastTest { get; set; }
     public List<string> Paths { get; set; } = [];
     public DateTime? LastGoodAt { get; set; }
     public long? ActiveJobId { get; set; }
@@ -29,4 +38,15 @@ public class BackupVolumeModel
     public double? PercentDone { get; set; }
     public string? LastError { get; set; }
     public string? ReplaceBlockedReason { get; set; }
+    public string? DumpReplaceBlockedReason { get; set; }
+}
+
+public class BackupTestModel
+{
+    public long JobId { get; set; }
+    public DateTime? FinishedAt { get; set; }
+    public bool Succeeded { get; set; }
+
+    /// <summary>What arrived, or why the test failed.</summary>
+    public string? Message { get; set; }
 }

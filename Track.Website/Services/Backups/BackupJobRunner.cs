@@ -11,7 +11,7 @@ using Microsoft.Extensions.Options;
 namespace Track.Website.Services.Backups;
 
 /// <summary>Agent: runs this node's jobs. restic runs in a helper labelled with the job, so a restarted agent adopts it.</summary>
-public sealed class BackupJobRunner(
+public sealed partial class BackupJobRunner(
     ILogger<BackupJobRunner> logger,
     IOptions<TrackOptions> options,
     DockerClientFactory clientFactory,
@@ -61,6 +61,8 @@ public sealed class BackupJobRunner(
                     BackupJobKind.Restore => await RestoreAsync(job, output, stoppingToken),
                     BackupJobKind.Hook => await HooksAsync(job, output, stoppingToken),
                     BackupJobKind.Scale => await ScaleAsync(job, output, stoppingToken),
+                    BackupJobKind.Import => await ImportAsync(job, output, stoppingToken),
+                    BackupJobKind.Verify => await VerifyAsync(job, output, stoppingToken),
                     _ => Failed($"Agents don't run {job.Kind} jobs", output),
                 };
             }
@@ -89,6 +91,9 @@ public sealed class BackupJobRunner(
 
     private async Task<AgentJobResult> BackupAsync(AgentJob job, OutputLog output, CancellationToken cancellationToken)
     {
+        if (job.Dump is not null)
+            return await DumpBackupAsync(job, output, cancellationToken);
+
         var client = Client;
         var volume = job.VolumeName!;
         var hookTimeout = TimeSpan.FromSeconds(job.HookTimeoutSeconds);
@@ -320,7 +325,9 @@ public sealed class BackupJobRunner(
         List<string> arguments,
         List<string> binds,
         List<string>? stoppedContainers,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool openStdin = false,
+        bool attachOutput = false)
     {
         var labels = new Dictionary<string, string> { [DockerLabels.BackupJob] = job.Id.ToString(CultureInfo.InvariantCulture) };
         if (stoppedContainers is { Count: > 0 })
@@ -340,10 +347,17 @@ public sealed class BackupJobRunner(
             Env = environment,
             User = "0:0",
             Labels = labels,
+            OpenStdin = openStdin,
+            StdinOnce = openStdin,
+            AttachStdin = openStdin,
+            AttachStdout = attachOutput,
+            AttachStderr = attachOutput,
             HostConfig = new HostConfig
             {
                 Binds = [.. binds, $"{_options.CacheVolume}:/cache"],
                 NetworkMode = _options.HelperNetwork,
+                // A dump read back out of restic is the whole database; it must not end up in the container log.
+                LogConfig = attachOutput ? new LogConfig { Type = "none" } : null,
             },
         }, cancellationToken);
         return created.ID;
@@ -395,6 +409,8 @@ public sealed class BackupJobRunner(
             var client = Client;
             if (await FindHelperAsync(client, jobId, CancellationToken.None) is { } helper)
                 await client.Containers.RemoveContainerAsync(helper, new ContainerRemoveParameters { Force = true }, CancellationToken.None);
+            if (await FindScratchAsync(client, jobId, CancellationToken.None) is { } scratch)
+                await client.Containers.RemoveContainerAsync(scratch, new ContainerRemoveParameters { Force = true, RemoveVolumes = true }, CancellationToken.None);
         }
         catch (Exception ex)
         {

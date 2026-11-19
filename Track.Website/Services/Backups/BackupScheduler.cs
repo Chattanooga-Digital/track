@@ -18,7 +18,12 @@ public sealed class BackupScheduler(
     BackupNotifier notifier,
     IHttpClientFactory httpClientFactory)
 {
-    public static readonly BackupJobKind[] AgentKinds = [BackupJobKind.Backup, BackupJobKind.Restore, BackupJobKind.Hook, BackupJobKind.Scale];
+    public static readonly BackupJobKind[] AgentKinds =
+        [BackupJobKind.Backup, BackupJobKind.Restore, BackupJobKind.Hook, BackupJobKind.Scale, BackupJobKind.Import, BackupJobKind.Verify];
+
+    /// <summary>Jobs that move data through restic, which count against the per-node and total caps.</summary>
+    public static bool IsHeavy(BackupJobKind kind) =>
+        kind is BackupJobKind.Backup or BackupJobKind.Restore or BackupJobKind.Import or BackupJobKind.Verify;
 
     private static readonly TimeSpan DispatchTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromMinutes(5);
@@ -48,7 +53,7 @@ public sealed class BackupScheduler(
             if (catalog.Configured)
                 changed |= await DispatchAsync(catalog, cancellationToken);
 
-            _runtime.NeedsAttention = catalog.Volumes.Count(v => v.NeedsAttention);
+            _runtime.NeedsAttention = catalog.Volumes.Count(v => v.NeedsAttention) + catalog.AnonymousDatabases.Count;
             await HeartbeatAsync(catalog, cancellationToken);
 
             if (changed)
@@ -204,7 +209,7 @@ public sealed class BackupScheduler(
         if (queued.Count == 0)
             return false;
 
-        var busy = jobs.Where(j => j.Status != BackupJobStatus.Queued && j.Kind is BackupJobKind.Backup or BackupJobKind.Restore).ToList();
+        var busy = jobs.Where(j => j.Status != BackupJobStatus.Queued && IsHeavy(j.Kind)).ToList();
         var perNode = busy.GroupBy(j => j.NodeName ?? "").ToDictionary(g => g.Key, g => g.Count());
         var total = busy.Count;
         var states = catalog.Volumes.ToDictionary(v => v.Volume.Key);
@@ -231,7 +236,7 @@ public sealed class BackupScheduler(
             if (job.NodeName is null || !catalog.ReadyNodes.Contains(job.NodeName))
                 continue;
 
-            var heavy = job.Kind is BackupJobKind.Backup or BackupJobKind.Restore;
+            var heavy = IsHeavy(job.Kind);
             if (heavy && job.Trigger != BackupTrigger.Restore
                 && (perNode.GetValueOrDefault(job.NodeName) >= settings.MaxJobsPerNode || total >= settings.MaxJobsTotal))
                 continue;

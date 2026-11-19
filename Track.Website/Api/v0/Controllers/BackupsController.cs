@@ -5,8 +5,11 @@ using Track.Services.Backups;
 using Track.Website.Api.v0.Models.Backups;
 using Track.Website.Services.Backups;
 using Microsoft.AspNetCore.Authorization;
+using System.Globalization;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Net.Http.Headers;
 
 namespace Track.Website.Api.v0.Controllers;
 
@@ -73,32 +76,77 @@ public class BackupsController(
             Paused = catalog.Settings.Paused,
             Included = catalog.Volumes.Count(v => v.Volume.Protected),
             Protected = catalog.Volumes.Count(v => v.Volume.Protected && v.LastGoodAt > DateTime.UtcNow.AddHours(-catalog.Settings.StaleAfterHours)),
-            NeedsAttention = catalog.Volumes.Count(v => v.NeedsAttention),
-            Excluded = catalog.Volumes.Count(v => v.Status == BackupVolumeStatus.Excluded),
+            NeedsAttention = catalog.Volumes.Count(v => v.NeedsAttention) + catalog.AnonymousDatabases.Count,
+            Ignored = catalog.Volumes.Count(v => v.Status == BackupVolumeStatus.Excluded),
             UploadedLast24HoursBytes = uploaded,
             ReadyNodes = [.. catalog.ReadyNodes.Order()],
             Groups = groups,
+            AnonymousDatabases = catalog.AnonymousDatabases,
         });
     }
 
     [HttpPut("volumes/override")]
     public async Task<IActionResult> SetOverride([FromBody] VolumeOverrideModel model, CancellationToken cancellationToken)
     {
-        var existing = await TrackContext.BackupVolumeOverrides.SingleOrDefaultAsync(o => o.VolumeName == model.VolumeName, cancellationToken);
-        if (model.Excluded is null)
-        {
-            if (existing is not null)
-                TrackContext.BackupVolumeOverrides.Remove(existing);
-        }
-        else
-        {
-            existing ??= TrackContext.BackupVolumeOverrides.Add(new BackupVolumeOverride { VolumeName = model.VolumeName }).Entity;
-            existing.Excluded = model.Excluded.Value;
-            existing.UpdatedAt = DateTime.UtcNow;
-            existing.UpdatedBy = User.Identity?.Name;
-        }
+        var names = model.VolumeNames.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
+        if (names.Count == 0)
+            return BadRequest("Pick at least one volume.");
+
+        var existing = await TrackContext.BackupVolumeOverrides
+            .Where(o => names.Contains(o.VolumeName))
+            .ToDictionaryAsync(o => o.VolumeName, cancellationToken);
+        foreach (var name in names)
+            SetChoice(existing.GetValueOrDefault(name), name, choice => choice.Excluded = model.Excluded);
 
         await TrackContext.SaveChangesAsync(cancellationToken);
+        await Notifier.ChangedAsync(cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPut("volumes/method")]
+    public async Task<IActionResult> SetMethod([FromBody] VolumeMethodModel model, CancellationToken cancellationToken)
+    {
+        var existing = await TrackContext.BackupVolumeOverrides.SingleOrDefaultAsync(o => o.VolumeName == model.VolumeName, cancellationToken);
+        SetChoice(existing, model.VolumeName, choice => choice.Method = model.Method);
+
+        await TrackContext.SaveChangesAsync(cancellationToken);
+        await Notifier.ChangedAsync(cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("volumes/test")]
+    public async Task<IActionResult> TestRestore([FromBody] VolumeTestModel model, CancellationToken cancellationToken)
+    {
+        var catalog = await CatalogService.BuildAsync(cancellationToken);
+        if (!catalog.Configured)
+            return BadRequest("Set up the backup target and master key first.");
+
+        var state = catalog.Volumes.FirstOrDefault(v => v.Volume.Key == model.Key);
+        if (state is null)
+            return BadRequest("That volume isn't known.");
+        if (state.ActiveJob is not null)
+            return Conflict("That volume already has a job in progress.");
+
+        var snapshots = TrackContext.BackupSnapshots.AsNoTracking()
+            .Where(s => s.VolumeName == state.Volume.VolumeName && s.DumpEngine != null);
+        var snapshot = model.SnapshotId is { } id
+            ? await snapshots.SingleOrDefaultAsync(s => s.Id == id, cancellationToken)
+            : await snapshots.Where(s => s.VolumeKey == state.Volume.Key).OrderByDescending(s => s.Time).FirstOrDefaultAsync(cancellationToken);
+        if (snapshot is null)
+            return BadRequest("There's no database dump to test yet.");
+
+        var image = Split(snapshot.Images).FirstOrDefault(i => DatabaseDumps.EngineFor(i) == snapshot.DumpEngine)
+            ?? (state.Volume.Engine == snapshot.DumpEngine ? state.Volume.DatabaseImage : null);
+        if (image is null)
+            return BadRequest("Can't tell which database image the dump came from.");
+
+        var node = state.Volume.NodeName is { } own && catalog.ReadyNodes.Contains(own) ? own : catalog.ReadyNodes.Order().FirstOrDefault();
+        if (node is null)
+            return BadRequest("No approved agent is online.");
+
+        JobFactory.QueueVerify(snapshot, image, node, User.Identity?.Name);
+        await TrackContext.SaveChangesAsync(cancellationToken);
+        await Scheduler.TickAsync(cancellationToken);
         await Notifier.ChangedAsync(cancellationToken);
         return NoContent();
     }
@@ -171,13 +219,14 @@ public class BackupsController(
                 BytesAdded = s.BytesAdded,
                 TotalBytes = s.TotalBytes,
                 PreRestore = s.PreRestore,
+                DumpEngine = s.DumpEngine,
                 DifferentImage = images.Count > 0 && currentImages.Count > 0 && !images.Select(ImageName).ToHashSet().SetEquals(currentImages),
             };
         }));
     }
 
-    [HttpGet("snapshots/{id:long}/download")]
-    public async Task<IActionResult> Download([FromRoute] long id, CancellationToken cancellationToken)
+    [HttpGet("snapshots/{id:long}/files")]
+    public async Task<IActionResult> Files([FromRoute] long id, [FromQuery] string? path, CancellationToken cancellationToken)
     {
         var snapshot = await TrackContext.BackupSnapshots.AsNoTracking().SingleOrDefaultAsync(s => s.Id == id, cancellationToken);
         var target = await TrackContext.BackupTargets.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
@@ -185,11 +234,84 @@ public class BackupsController(
             return NotFound();
         if (target is null || MasterKey.Value is null)
             return BadRequest("Set up the backup target and master key first.");
+        if (CleanPath(path) is not { } relative)
+            return BadRequest("That path isn't valid.");
 
-        var restic = ResticTargets.For(target, snapshot.RepositoryKey, maintenance: true);
-        Response.ContentType = "application/x-tar";
-        Response.Headers.ContentDisposition = $"attachment; filename=\"{snapshot.VolumeName}-{snapshot.Time:yyyyMMdd-HHmm}.tar\"";
-        await Restic.RunAsync(restic, ["dump", "--archive", "tar", snapshot.SnapshotId, BackupJobFactory.SnapshotPath(snapshot)],
+        var directory = InSnapshot(snapshot, relative);
+        var result = await Restic.RunAsync(ResticTargets.For(target, snapshot.RepositoryKey, maintenance: true),
+            ["ls", "--json", snapshot.SnapshotId, directory], cancellationToken);
+        if (!result.Succeeded)
+            return BadRequest(result.Message);
+
+        var entries = new List<SnapshotEntryModel>();
+        foreach (var line in result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            using var document = JsonDocument.Parse(line);
+            var node = document.RootElement;
+            if (!node.TryGetProperty("struct_type", out var type) || type.GetString() != "node"
+                || node.GetProperty("path").GetString() is not { } entryPath
+                || entryPath == directory || entryPath[..entryPath.LastIndexOf('/')] != directory)
+                continue;
+
+            entries.Add(new SnapshotEntryModel
+            {
+                Name = node.GetProperty("name").GetString()!,
+                IsDirectory = node.GetProperty("type").GetString() == "dir",
+                Size = node.TryGetProperty("size", out var size) && size.ValueKind == JsonValueKind.Number ? size.GetInt64() : null,
+                ModifiedAt = node.TryGetProperty("mtime", out var mtime) ? SnapshotIndex.ParseTime(mtime.GetString()) : null,
+            });
+        }
+
+        return Ok(new SnapshotListingModel
+        {
+            Path = relative,
+            Entries = [.. entries.OrderByDescending(e => e.IsDirectory).ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)],
+        });
+    }
+
+    /// <summary>The whole snapshot, or one file or folder in it when <paramref name="path"/> is given.</summary>
+    [HttpGet("snapshots/{id:long}/download")]
+    public async Task<IActionResult> Download(
+        [FromRoute] long id, [FromQuery] string? path, [FromQuery] bool directory, CancellationToken cancellationToken)
+    {
+        var snapshot = await TrackContext.BackupSnapshots.AsNoTracking().SingleOrDefaultAsync(s => s.Id == id, cancellationToken);
+        var target = await TrackContext.BackupTargets.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
+        if (snapshot is null)
+            return NotFound();
+        if (target is null || MasterKey.Value is null)
+            return BadRequest("Set up the backup target and master key first.");
+        if (CleanPath(path) is not { } relative)
+            return BadRequest("That path isn't valid.");
+
+        var stamp = $"{snapshot.VolumeName}-{snapshot.Time:yyyyMMdd-HHmm}";
+        string source;
+        string fileName;
+        bool archive;
+        if (relative.Length > 0)
+        {
+            source = InSnapshot(snapshot, relative);
+            archive = directory;
+            fileName = relative[(relative.LastIndexOf('/') + 1)..] + (archive ? ".tar" : "");
+        }
+        else if (snapshot.DumpEngine is not null)
+        {
+            source = BackupJobFactory.DumpPath(snapshot.VolumeName);
+            archive = false;
+            fileName = $"{stamp}.sql";
+        }
+        else
+        {
+            source = BackupJobFactory.SnapshotPath(snapshot);
+            archive = true;
+            fileName = $"{stamp}.tar";
+        }
+
+        var disposition = new ContentDispositionHeaderValue("attachment");
+        disposition.SetHttpFileName(fileName);
+        Response.ContentType = archive ? "application/x-tar" : "application/octet-stream";
+        Response.Headers.ContentDisposition = disposition.ToString();
+        await Restic.RunAsync(ResticTargets.For(target, snapshot.RepositoryKey, maintenance: true),
+            archive ? ["dump", "--archive", "tar", snapshot.SnapshotId, source] : ["dump", snapshot.SnapshotId, source],
             cancellationToken, Response.Body);
         return new EmptyResult();
     }
@@ -204,6 +326,9 @@ public class BackupsController(
         var catalog = await CatalogService.BuildAsync(cancellationToken);
         if (!catalog.Configured)
             return BadRequest("Set up the backup target and master key first.");
+
+        if (snapshot.DumpEngine is not null && model.Mode == RestoreMode.NewVolume)
+            return BadRequest("A database dump restores into the database: replace the live data or download it.");
 
         if (model.Mode == RestoreMode.NewVolume)
         {
@@ -227,8 +352,10 @@ public class BackupsController(
             return BadRequest("That volume isn't on any node right now.");
         if (model.ConfirmVolumeName != state.Volume.VolumeName)
             return BadRequest("Type the volume name to confirm.");
-        if (state.ReplaceBlockedReason is { } reason)
+        if ((snapshot.DumpEngine is null ? state.ReplaceBlockedReason : state.DumpReplaceBlockedReason) is { } reason)
             return BadRequest(reason);
+        if (snapshot.DumpEngine is { } engine && state.Volume.Engine != engine)
+            return BadRequest($"The dump is from {engine}, but {state.Volume.DatabaseService} isn't.");
         if (state.ActiveJob is not null)
             return Conflict("That volume already has a job in progress.");
 
@@ -474,9 +601,21 @@ public class BackupsController(
             Status = state.Status,
             ExcludedBy = volume.ExcludedBy,
             Override = volume.Override,
-            HasHooks = volume.PreHooks.Count > 0,
+            HasHooks = volume.Method == BackupMethod.Files && volume.PreHooks.Count > 0,
             HasRestoreHooks = volume.RestorePreHooks.Count > 0 || volume.RestorePostHooks.Count > 0,
-            DatabaseWithoutHook = volume.Protected && volume.DatabaseWithoutHook,
+            DatabaseWithoutDump = volume.Protected && volume.DatabaseWithoutDump,
+            Method = volume.Method,
+            MethodOverride = volume.MethodOverride,
+            Engine = volume.Engine,
+            LastTest = state.LastTest is { } test
+                ? new BackupTestModel
+                {
+                    JobId = test.Id,
+                    FinishedAt = test.FinishedAt,
+                    Succeeded = test.Status == BackupJobStatus.Succeeded,
+                    Message = test.Status == BackupJobStatus.Succeeded ? test.Summary : test.Error,
+                }
+                : null,
             Paths = volume.Paths,
             LastGoodAt = state.LastGoodAt,
             ActiveJobId = state.ActiveJob?.Id,
@@ -484,8 +623,29 @@ public class BackupsController(
             PercentDone = state.ActiveJob?.PercentDone,
             LastError = state.Status == BackupVolumeStatus.Failed ? state.LastJob?.Error : null,
             ReplaceBlockedReason = state.ReplaceBlockedReason,
+            DumpReplaceBlockedReason = state.DumpReplaceBlockedReason,
         };
     }
+
+    private void SetChoice(BackupVolumeOverride? existing, string volumeName, Action<BackupVolumeOverride> apply)
+    {
+        existing ??= TrackContext.BackupVolumeOverrides.Add(new BackupVolumeOverride { VolumeName = volumeName }).Entity;
+        apply(existing);
+        existing.UpdatedAt = DateTime.UtcNow;
+        existing.UpdatedBy = User.Identity?.Name;
+        if (existing.Excluded is null && existing.Method is null)
+            TrackContext.BackupVolumeOverrides.Remove(existing);
+    }
+
+    /// <summary>A path inside a volume with no <c>.</c> or <c>..</c> parts; empty for the root, null when it isn't valid.</summary>
+    private static string? CleanPath(string? path)
+    {
+        var parts = (path ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Any(p => p is "." or "..") ? null : string.Join('/', parts);
+    }
+
+    private static string InSnapshot(BackupSnapshot snapshot, string relative) =>
+        relative.Length == 0 ? $"/data/{snapshot.VolumeName}" : $"/data/{snapshot.VolumeName}/{relative}";
 
     private static BackupJobModel ToModel(BackupJob job, IReadOnlyDictionary<long, List<ReplaceStep>> stepsByParent, bool includeOutput) => new()
     {
@@ -512,6 +672,7 @@ public class BackupsController(
         FilesChanged = job.FilesChanged,
         SnapshotId = job.SnapshotId,
         Error = job.Error,
+        Summary = job.Summary,
         RequestedBy = job.RequestedBy,
         CancelRequested = job.CancelRequested,
         Output = includeOutput ? job.OutputTail : null,

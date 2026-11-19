@@ -7,7 +7,9 @@ import type {
   BackupTargetCheckDto,
   BackupTargetDto,
   BackupTargetEditDto,
+  BackupMethod,
   RestoreRequestDto,
+  SnapshotListingDto,
 } from '@/types/backups'
 
 export async function getBackupOverview(): Promise<BackupOverviewDto> {
@@ -16,10 +18,21 @@ export async function getBackupOverview(): Promise<BackupOverviewDto> {
 }
 
 export async function setVolumeOverride(
-  volumeName: string,
+  volumeNames: string[],
   excluded: boolean | null,
 ): Promise<void> {
-  await http.put('/backups/volumes/override', { volumeName, excluded })
+  await http.put('/backups/volumes/override', { volumeNames, excluded })
+}
+
+export async function setVolumeMethod(
+  volumeName: string,
+  method: BackupMethod | null,
+): Promise<void> {
+  await http.put('/backups/volumes/method', { volumeName, method })
+}
+
+export async function testRestore(key: string, snapshotId: number | null = null): Promise<void> {
+  await http.post('/backups/volumes/test', { key, snapshotId })
 }
 
 export async function backUpVolume(key: string): Promise<void> {
@@ -35,8 +48,19 @@ export async function getSnapshots(volume: string): Promise<BackupSnapshotDto[]>
   return data
 }
 
-export function snapshotDownloadUrl(id: number): string {
-  return `/api/v0/backups/snapshots/${id}/download`
+export async function getSnapshotFiles(id: number, path: string): Promise<SnapshotListingDto> {
+  const { data } = await http.get<SnapshotListingDto>(`/backups/snapshots/${id}/files`, {
+    params: { path },
+  })
+  return data
+}
+
+export function snapshotDownloadUrl(id: number, path = '', directory = false): string {
+  const query = new URLSearchParams()
+  if (path) query.set('path', path)
+  if (directory) query.set('directory', 'true')
+  const suffix = query.size ? `?${query}` : ''
+  return `/api/v0/backups/snapshots/${id}/download${suffix}`
 }
 
 export async function restoreSnapshot(request: RestoreRequestDto): Promise<void> {

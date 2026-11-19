@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { BackupSnapshotDto, BackupVolumeDto } from '@/types/backups'
-import { getSnapshots, restoreSnapshot, snapshotDownloadUrl } from '@/api/backupsApi'
+import { getSnapshots, restoreSnapshot, snapshotDownloadUrl, testRestore } from '@/api/backupsApi'
 import { apiErrorMessage } from '@/api/http'
 import { useAuthStore } from '@/stores/authStore'
 import { formatBytes } from '@/utils/format'
@@ -16,7 +16,7 @@ const emit = defineEmits<{
   started: [message: string]
 }>()
 
-type Mode = 'NewVolume' | 'Replace' | 'Download'
+type Mode = 'NewVolume' | 'Replace' | 'Test' | 'Download'
 
 const authStore = useAuthStore()
 const snapshots = ref<BackupSnapshotDto[]>([])
@@ -63,10 +63,27 @@ watch(
 const shown = computed(() => (showAll.value ? snapshots.value : snapshots.value.slice(0, 5)))
 const selected = computed(() => snapshots.value.find((s) => s.id === selectedId.value) ?? null)
 const isAdmin = computed(() => !!authStore.user?.isAdministrator)
+const isDump = computed(() => !!selected.value?.dumpEngine)
+
+watch(isDump, (dump) => {
+  if (dump && mode.value === 'NewVolume') mode.value = 'Test'
+  if (!dump && mode.value === 'Test') mode.value = 'NewVolume'
+})
+
+const blockedReason = computed(() =>
+  isDump.value ? props.volume?.dumpReplaceBlockedReason : props.volume?.replaceBlockedReason,
+)
 
 const plan = computed(() => {
   const v = props.volume
   if (!v) return []
+  if (isDump.value)
+    return [
+      'Dump the current database',
+      'Stop the rest of the stack',
+      'Import this dump',
+      'Start the rest of the stack',
+    ]
   const services = v.services.join(', ') || 'the services using it'
   const steps = ['Snapshot current data', `Stop ${services}`, `Restore on ${v.nodeName}`]
   steps.push(`Start ${services}`)
@@ -77,12 +94,9 @@ const plan = computed(() => {
 const canSubmit = computed(() => {
   if (!selected.value || submitting.value) return false
   if (mode.value === 'NewVolume') return node.value !== null
+  if (mode.value === 'Test') return true
   if (mode.value === 'Replace')
-    return (
-      isAdmin.value &&
-      !props.volume?.replaceBlockedReason &&
-      confirmName.value === props.volume?.volumeName
-    )
+    return isAdmin.value && !blockedReason.value && confirmName.value === props.volume?.volumeName
   return false
 })
 
@@ -91,6 +105,12 @@ async function submit() {
   submitting.value = true
   error.value = ''
   try {
+    if (mode.value === 'Test') {
+      await testRestore(props.volume.key, selected.value.id)
+      emit('started', `Testing a restore of ${props.volume.volumeName}.`)
+      open.value = false
+      return
+    }
     await restoreSnapshot({
       snapshotId: selected.value.id,
       mode: mode.value,
@@ -145,6 +165,7 @@ async function submit() {
                     · +{{ formatBytes(s.bytesAdded) }}</template
                   >
                 </span>
+                <v-chip v-if="s.dumpEngine" size="x-small" variant="tonal">Dump</v-chip>
                 <v-chip v-if="s.preRestore" size="x-small" variant="tonal">Before restore</v-chip>
                 <v-chip v-if="s.differentImage" size="x-small" color="warning" variant="tonal"
                   >Different image</v-chip
@@ -167,10 +188,11 @@ async function submit() {
 
         <div class="text-caption text-medium-emphasis mt-4 mb-1">Restore as</div>
         <v-btn-toggle v-model="mode" mandatory density="comfortable" variant="outlined" divided>
-          <v-btn value="NewVolume">New volume</v-btn>
+          <v-btn v-if="!isDump" value="NewVolume">New volume</v-btn>
           <v-btn value="Replace" :color="mode === 'Replace' ? 'error' : undefined"
             >Replace live data</v-btn
           >
+          <v-btn v-if="isDump" value="Test">Test</v-btn>
           <v-btn value="Download">Download</v-btn>
         </v-btn-toggle>
 
@@ -186,13 +208,8 @@ async function submit() {
         </div>
 
         <div v-else-if="mode === 'Replace'" class="mt-4">
-          <v-alert
-            v-if="volume.replaceBlockedReason"
-            type="warning"
-            variant="tonal"
-            density="compact"
-          >
-            {{ volume.replaceBlockedReason }}
+          <v-alert v-if="blockedReason" type="warning" variant="tonal" density="compact">
+            {{ blockedReason }}
           </v-alert>
           <v-alert v-else-if="!isAdmin" type="info" variant="tonal" density="compact">
             Only administrators can replace live data.
@@ -212,13 +229,13 @@ async function submit() {
           </template>
         </div>
 
-        <div v-else class="mt-4">
+        <div v-else-if="mode === 'Download'" class="mt-4">
           <v-btn
             :href="selected ? snapshotDownloadUrl(selected.id) : undefined"
             :disabled="!selected"
             prepend-icon="mdi-download"
             variant="tonal"
-            >Download .tar</v-btn
+            >Download {{ isDump ? '.sql' : '.tar' }}</v-btn
           >
         </div>
 
@@ -236,7 +253,9 @@ async function submit() {
           :disabled="!canSubmit"
           :loading="submitting"
           @click="submit"
-          >{{ mode === 'Replace' ? 'Replace live data' : 'Restore' }}</v-btn
+          >{{
+            mode === 'Replace' ? 'Replace live data' : mode === 'Test' ? 'Test restore' : 'Restore'
+          }}</v-btn
         >
       </v-card-actions>
     </v-card>

@@ -15,6 +15,9 @@ public static class DockerLabels
 
     public const string RestoreOf = "digital.chattanooga.track.restore-of";
 
+    /// <summary>Marks the throwaway database container a restore test imports into.</summary>
+    public const string BackupScratch = "digital.chattanooga.track.backup.scratch";
+
     public static string? GetStackName(IDictionary<string, string>? labels) =>
         GetLabel(labels, StackNamespace) ?? GetLabel(labels, ComposeProject) ?? GetLabel(labels, TrackStack);
 

@@ -1,3 +1,4 @@
+using Track.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -10,6 +11,8 @@ public class BackupSnapshot : IEntityTypeConfiguration<BackupSnapshot>
 
     /// <summary>Safety snapshots taken before a replace. Tagged apart so they never take a day's slot in the retention policy.</summary>
     public const string PreRestoreTag = "track-pre-restore";
+
+    public const string DumpTagPrefix = "dump=";
 
     public long Id { get; set; }
     public required string SnapshotId { get; set; }
@@ -32,6 +35,10 @@ public class BackupSnapshot : IEntityTypeConfiguration<BackupSnapshot>
     public long? BytesAdded { get; set; }
     public long? TotalBytes { get; set; }
     public bool PreRestore { get; set; }
+
+    /// <summary>Set when the snapshot holds a database dump rather than the volume's files.</summary>
+    public DatabaseEngine? DumpEngine { get; set; }
+
     public long? JobId { get; set; }
 
     public void Configure(EntityTypeBuilder<BackupSnapshot> builder)

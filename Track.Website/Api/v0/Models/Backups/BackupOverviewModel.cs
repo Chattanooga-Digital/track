@@ -1,3 +1,5 @@
+using Track.Services.Backups;
+
 namespace Track.Website.Api.v0.Models.Backups;
 
 public class BackupOverviewModel
@@ -10,13 +12,16 @@ public class BackupOverviewModel
     /// <summary>Included volumes with a good backup inside the stale window.</summary>
     public int Protected { get; set; }
     public int NeedsAttention { get; set; }
-    public int Excluded { get; set; }
+    public int Ignored { get; set; }
     public long UploadedLast24HoursBytes { get; set; }
 
     /// <summary>Approved, online nodes a volume can be restored onto.</summary>
     public List<string> ReadyNodes { get; set; } = [];
 
     public List<BackupGroupModel> Groups { get; set; } = [];
+
+    /// <summary>Databases keeping their data in an anonymous volume, which a redeploy replaces with an empty one.</summary>
+    public List<AnonymousDatabase> AnonymousDatabases { get; set; } = [];
 }
 
 public class BackupGroupModel

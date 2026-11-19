@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Track.Enums;
 using Track.Services.Ingest;
 
 namespace Track.Services.Backups;
@@ -22,7 +23,15 @@ public enum ExclusionSource
 {
     Label,
     Track,
+
+    /// <summary>Docker measured it at 0 bytes. It comes back on its own once it holds data.</summary>
+    Empty,
 }
+
+public sealed record VolumeOverride(bool? Excluded, BackupMethod? Method);
+
+/// <summary>A database container whose data lives in an anonymous volume, which a redeploy replaces with an empty one.</summary>
+public sealed record AnonymousDatabase(string NodeName, string ServiceName, string? StackName);
 
 public sealed record CatalogVolume(
     string Key,
@@ -43,20 +52,32 @@ public sealed record CatalogVolume(
     bool Running,
     bool Global,
     List<string> Copies,
-    bool HoldsDatabase)
+    bool HoldsDatabase,
+    DatabaseEngine? Engine = null,
+    string? DatabaseService = null,
+    string? DatabaseImage = null,
+    BackupMethod? MethodOverride = null)
 {
     public bool Excluded => ExcludedBy is not null;
 
     public bool Protected => !Excluded && Kind is CatalogVolumeKind.Single or CatalogVolumeKind.PerNode;
 
-    public bool DatabaseWithoutHook => PreHooks.Count == 0 && HoldsDatabase;
+    /// <summary>Track's choice wins, then a stack's own dump hook, then a dump of any database Track knows how to dump.</summary>
+    public BackupMethod Method => MethodOverride switch
+    {
+        BackupMethod.Dump when Engine is not null => BackupMethod.Dump,
+        BackupMethod.Files => BackupMethod.Files,
+        _ => PreHooks.Count == 0 && Engine is not null ? BackupMethod.Dump : BackupMethod.Files,
+    };
+
+    public bool DatabaseWithoutDump => HoldsDatabase && Method == BackupMethod.Files && PreHooks.Count == 0;
 }
 
 public sealed record CatalogInputs(
     IReadOnlyDictionary<string, List<NodeVolume>> VolumesByNode,
     IReadOnlyDictionary<string, List<VolumeMount>> MountsByNode,
     SwarmReport? Swarm,
-    IReadOnlyDictionary<string, bool> Overrides,
+    IReadOnlyDictionary<string, VolumeOverride> Overrides,
     IReadOnlySet<string> IgnoredVolumes);
 
 /// <summary>Turns what agents report into the list of volumes to back up, one entry per copy that matters.</summary>
@@ -80,8 +101,8 @@ public static partial class BackupCatalog
                 .ToList();
             var mountNodes = mounts.Select(m => m.Node).Distinct().Order(StringComparer.Ordinal).ToList();
 
-            // Anonymous volumes nothing uses are leftovers from removed containers.
-            if (mountNodes.Count == 0 && AnonymousVolume().IsMatch(name))
+            // A redeploy gives the service a fresh anonymous volume, so a backup of one has nothing to restore into.
+            if (AnonymousVolume().IsMatch(name))
                 continue;
 
             var copies = inputs.VolumesByNode
@@ -119,6 +140,17 @@ public static partial class BackupCatalog
 
         return catalog;
     }
+
+    public static List<AnonymousDatabase> AnonymousDatabases(CatalogInputs inputs) =>
+        inputs.MountsByNode
+            .SelectMany(entry => entry.Value.Select(mount => (Node: entry.Key, Mount: mount)))
+            .Where(m => AnonymousVolume().IsMatch(m.Mount.VolumeName)
+                && DatabaseImages.IsDatabase(m.Mount.Image)
+                && (m.Mount.Destination is null || DatabaseImages.IsDataPath(m.Mount.Destination)))
+            .Select(m => new AnonymousDatabase(m.Node, m.Mount.ServiceName ?? m.Mount.ContainerName, m.Mount.StackName))
+            .Distinct()
+            .OrderBy(d => d.ServiceName, StringComparer.Ordinal)
+            .ToList();
 
     private static CatalogVolume BuildEntry(
         CatalogInputs inputs,
@@ -159,13 +191,18 @@ public static partial class BackupCatalog
                 [], [], [], [], [], false, global, copies, false);
         }
 
+        var choice = inputs.Overrides.GetValueOrDefault(name);
+        var overridden = choice?.Excluded;
         ExclusionSource? excludedBy = null;
-        bool? overridden = inputs.Overrides.TryGetValue(name, out var excluded) ? excluded : null;
         if (overridden == true)
             excludedBy = ExclusionSource.Track;
         else if (overridden is null && labelsByService.Values.Any(labels =>
                      BackupLabels.ExcludesService(labels) || BackupLabels.ExcludesVolume(labels, name, stack)))
             excludedBy = ExclusionSource.Label;
+        else if (overridden is null && volume?.SizeBytes == 0)
+            excludedBy = ExclusionSource.Empty;
+
+        var database = DatabaseIn(nodeMounts, services);
 
         List<AgentHook> Hooks(string label) => labelsByService
             .Select(entry => BackupLabels.Hook(entry.Value, label) is { } command ? new AgentHook(entry.Key, command) : null)
@@ -191,7 +228,32 @@ public static partial class BackupCatalog
             nodeMounts.Count > 0,
             global,
             copies,
-            HoldsDatabase(nodeMounts, services));
+            HoldsDatabase(nodeMounts, services),
+            database?.Engine,
+            database?.Service,
+            database?.Image,
+            choice?.Method);
+    }
+
+    private static (DatabaseEngine Engine, string Service, string? Image)? DatabaseIn(List<VolumeMount> mounts, List<SwarmServiceInfo> services)
+    {
+        foreach (var mount in mounts)
+        {
+            if (DatabaseDumps.EngineFor(mount.Image) is { } engine
+                && (mount.Destination is null || DatabaseImages.IsDataPath(mount.Destination)))
+                return (engine, mount.ServiceName ?? mount.ContainerName, mount.Image);
+        }
+
+        if (mounts.Count == 0)
+        {
+            foreach (var service in services)
+            {
+                if (DatabaseDumps.EngineFor(service.Image) is { } engine)
+                    return (engine, service.Name, service.Image);
+            }
+        }
+
+        return null;
     }
 
     // Swarm services and older agents don't report where a volume is mounted, so any database use counts there.

@@ -10,7 +10,16 @@ export type BackupVolumeStatus =
   | 'StaleCopy'
   | 'Ambiguous'
   | 'NodeOffline'
-export type BackupJobKind = 'Backup' | 'Restore' | 'Hook' | 'Scale' | 'Prune' | 'Check' | 'Replace'
+export type BackupJobKind =
+  | 'Backup'
+  | 'Restore'
+  | 'Hook'
+  | 'Scale'
+  | 'Prune'
+  | 'Check'
+  | 'Replace'
+  | 'Import'
+  | 'Verify'
 export type BackupJobStatus =
   | 'Queued'
   | 'Dispatched'
@@ -19,7 +28,9 @@ export type BackupJobStatus =
   | 'Failed'
   | 'Cancelled'
 export type BackupTrigger = 'Schedule' | 'Manual' | 'Restore'
-export type ExclusionSource = 'Label' | 'Track'
+export type ExclusionSource = 'Label' | 'Track' | 'Empty'
+export type BackupMethod = 'Files' | 'Dump'
+export type DatabaseEngine = 'Postgres' | 'MariaDb' | 'MySql'
 export type S3Addressing = 'Auto' | 'VirtualHost' | 'Path'
 export type RestoreMode = 'NewVolume' | 'Replace'
 export type DayOfWeek =
@@ -45,7 +56,11 @@ export interface BackupVolumeDto {
   override: boolean | null
   hasHooks: boolean
   hasRestoreHooks: boolean
-  databaseWithoutHook: boolean
+  databaseWithoutDump: boolean
+  method: BackupMethod
+  methodOverride: BackupMethod | null
+  engine: DatabaseEngine | null
+  lastTest: BackupTestDto | null
   paths: string[]
   lastGoodAt: string | null
   activeJobId: number | null
@@ -53,6 +68,20 @@ export interface BackupVolumeDto {
   percentDone: number | null
   lastError: string | null
   replaceBlockedReason: string | null
+  dumpReplaceBlockedReason: string | null
+}
+
+export interface BackupTestDto {
+  jobId: number
+  finishedAt: string | null
+  succeeded: boolean
+  message: string | null
+}
+
+export interface AnonymousDatabaseDto {
+  nodeName: string
+  serviceName: string
+  stackName: string | null
 }
 
 export interface BackupGroupDto {
@@ -71,10 +100,11 @@ export interface BackupOverviewDto {
   included: number
   protected: number
   needsAttention: number
-  excluded: number
+  ignored: number
   uploadedLast24HoursBytes: number
   readyNodes: string[]
   groups: BackupGroupDto[]
+  anonymousDatabases: AnonymousDatabaseDto[]
 }
 
 export interface BackupJobDto {
@@ -99,6 +129,7 @@ export interface BackupJobDto {
   filesChanged: number | null
   snapshotId: string | null
   error: string | null
+  summary: string | null
   requestedBy: string | null
   cancelRequested: boolean
   output: string | null
@@ -117,7 +148,20 @@ export interface BackupSnapshotDto {
   bytesAdded: number | null
   totalBytes: number | null
   preRestore: boolean
+  dumpEngine: DatabaseEngine | null
   differentImage: boolean
+}
+
+export interface SnapshotEntryDto {
+  name: string
+  isDirectory: boolean
+  size: number | null
+  modifiedAt: string | null
+}
+
+export interface SnapshotListingDto {
+  path: string
+  entries: SnapshotEntryDto[]
 }
 
 export interface BackupSettingsDto {

@@ -49,6 +49,8 @@ const kindLabel: Record<string, string> = {
   Prune: 'Prune',
   Check: 'Check',
   Replace: 'Replace live data',
+  Import: 'Import',
+  Verify: 'Test restore',
 }
 
 function statusColor(job: BackupJobDto) {
@@ -123,6 +125,12 @@ function duration(job: BackupJobDto) {
               >
               <div v-if="job.error && job.status !== 'Cancelled'" class="text-caption text-error">
                 {{ job.error }}
+              </div>
+              <div
+                v-else-if="job.status === 'Succeeded' && job.summary"
+                class="text-caption text-medium-emphasis"
+              >
+                {{ job.summary }}
               </div>
             </td>
             <td class="text-right">
