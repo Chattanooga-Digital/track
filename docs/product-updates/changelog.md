@@ -16,7 +16,7 @@ improvements, bug fixes, and new features by version.
 
 #### Bug Fixes
  - The Agents page no longer switches role and backup approval to numbers after the first live update
- - The Backups page fits on screen with one menu per volume, Protected counts only volumes with a recent backup, and volumes not backed up yet no longer need attention
+ - The Backups page fits on screen with back up and restore buttons on each volume, Protected counts only volumes with a recent backup, and volumes not backed up yet no longer need attention
  - The no dump hook warning only flags volumes a database keeps its data in, not its init scripts
  - Empty values show blank instead of a dash
 

@@ -43,28 +43,10 @@ const needsAttention = (v: BackupVolumeDto) =>
   v.databaseWithoutHook ||
   ['Stale', 'Failed', 'StaleCopy', 'Ambiguous', 'NodeOffline'].includes(v.status)
 
-const multipleNodes = computed(
-  () =>
-    new Set(
-      (overview.value?.groups ?? []).flatMap((g) =>
-        g.volumes.flatMap((v) => (v.nodeName ? [v.nodeName] : v.copies)),
-      ),
-    ).size > 1,
-)
-
 const anonymousVolume = /^[0-9a-f]{64}$/
 
 const displayName = (v: BackupVolumeDto) =>
   anonymousVolume.test(v.volumeName) ? v.volumeName.slice(0, 12) : v.volumeName
-
-function detail(v: BackupVolumeDto) {
-  const parts: string[] = []
-  if (multipleNodes.value) parts.push(v.nodeName ?? v.copies.join(', '))
-  if (v.status === 'StaleCopy') parts.push('Not in use')
-  else if (v.services.length) parts.push(v.services.join(', '))
-  if (v.paths.length) parts.push(`Only ${v.paths.join(', ')}`)
-  return parts.join(' · ')
-}
 
 const groups = computed<BackupGroupDto[]>(() =>
   (overview.value?.groups ?? [])
@@ -103,38 +85,37 @@ const backUpEverything = () => run('all', backUpAll, 'Backups queued.')
 const isProtected = (v: BackupVolumeDto) =>
   !['Excluded', 'StaleCopy', 'Ambiguous'].includes(v.status)
 
-interface LastBackup {
+interface StatusChip {
   text: string
-  chip?: string
-  muted?: boolean
+  color?: string
+  variant?: 'tonal' | 'outlined'
 }
 
-function lastBackup(v: BackupVolumeDto): LastBackup {
-  const when = relativeTime(v.lastGoodAt)
+function statusChip(v: BackupVolumeDto): StatusChip {
   switch (v.status) {
     case 'Ok':
-      return { text: when }
+      return { text: 'OK', color: 'success' }
     case 'Queued':
-      return { text: 'Queued', chip: 'info' }
+      return { text: 'Queued', color: 'info' }
     case 'Running': {
       const verb = v.activeJobKind === 'Backup' ? 'Backing up' : 'Restoring'
       const percent = v.percentDone != null ? ` ${Math.round(v.percentDone * 100)}%` : ''
-      return { text: `${verb}${percent}`, chip: 'info' }
+      return { text: `${verb}${percent}`, color: 'info' }
     }
     case 'Stale':
-      return { text: when, chip: 'warning' }
+      return { text: 'Stale', color: 'warning' }
     case 'Failed':
-      return { text: 'Failed', chip: 'error' }
+      return { text: 'Failed', color: 'error' }
     case 'Never':
-      return { text: 'Not yet', muted: true }
+      return { text: 'Not backed up yet' }
     case 'Excluded':
-      return { text: v.excludedBy === 'Track' ? 'Excluded' : 'Excluded by label', muted: true }
+      return { text: v.excludedBy === 'Track' ? 'Excluded' : 'Excluded by label' }
     case 'StaleCopy':
-      return { text: 'Stale copy', muted: true }
+      return { text: 'Stale copy', color: 'warning', variant: 'outlined' }
     case 'Ambiguous':
-      return { text: 'Several copies', chip: 'warning' }
+      return { text: 'Several copies', color: 'warning' }
     case 'NodeOffline':
-      return { text: 'Node offline', chip: 'error' }
+      return { text: 'Node offline', color: 'error' }
   }
   return { text: v.status }
 }
@@ -231,15 +212,17 @@ function lastBackup(v: BackupVolumeDto): LastBackup {
             <thead>
               <tr>
                 <th>Volume</th>
+                <th>Node</th>
                 <th class="text-right">Size</th>
-                <th class="text-no-wrap">Last backup</th>
+                <th class="text-no-wrap">Last good</th>
+                <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               <template v-for="g in groups" :key="g.repositoryKey">
                 <tr class="group-row">
-                  <td colspan="4">
+                  <td colspan="6">
                     <span class="font-weight-medium">{{ groupName(g) }}</span>
                     <span class="text-caption text-medium-emphasis ml-2">{{
                       g.volumes.length
@@ -271,19 +254,18 @@ function lastBackup(v: BackupVolumeDto): LastBackup {
                         >No dump hook</v-chip
                       >
                       <v-chip
-                        v-if="v.override !== null"
+                        v-else-if="v.hasHooks"
                         size="x-small"
-                        variant="outlined"
+                        variant="tonal"
                         class="flex-shrink-0"
-                        >Override</v-chip
+                        >Dump hook</v-chip
                       >
                     </div>
                     <div
-                      v-if="detail(v)"
+                      v-if="v.paths.length"
                       class="text-caption text-medium-emphasis text-truncate"
-                      :title="detail(v)"
                     >
-                      {{ detail(v) }}
+                      Only {{ v.paths.join(', ') }}
                     </div>
                     <div
                       v-if="v.status === 'Failed' && v.lastError"
@@ -293,63 +275,85 @@ function lastBackup(v: BackupVolumeDto): LastBackup {
                       {{ v.lastError }}
                     </div>
                   </td>
+                  <td class="text-no-wrap">{{ v.nodeName ?? v.copies.join(', ') }}</td>
                   <td class="text-right text-no-wrap">{{ formatBytes(v.sizeBytes) }}</td>
                   <td class="text-no-wrap" :title="absoluteTime(v.lastGoodAt)">
-                    <v-chip
-                      v-if="lastBackup(v).chip"
-                      size="small"
-                      :color="lastBackup(v).chip"
-                      variant="tonal"
-                      >{{ lastBackup(v).text }}</v-chip
-                    >
-                    <span v-else :class="{ 'text-medium-emphasis': lastBackup(v).muted }">{{
-                      lastBackup(v).text
-                    }}</span>
+                    {{ v.lastGoodAt ? relativeTime(v.lastGoodAt) : '' }}
                   </td>
-                  <td class="text-right actions-cell">
-                    <v-menu v-if="v.status !== 'StaleCopy'">
-                      <template #activator="{ props }">
-                        <v-btn
-                          v-bind="props"
-                          icon="mdi-dots-vertical"
-                          size="small"
-                          variant="text"
-                          :loading="busyKey === v.key"
-                        />
-                      </template>
-                      <v-list density="compact">
-                        <template v-if="isProtected(v)">
-                          <v-list-item
-                            v-if="v.activeJobId"
-                            title="Cancel backup"
-                            @click="cancel(v)"
-                          />
-                          <v-list-item
-                            v-else
-                            title="Back up now"
-                            :disabled="!configured"
-                            @click="backUp(v)"
+                  <td class="text-no-wrap">
+                    <v-chip
+                      size="small"
+                      :color="statusChip(v).color"
+                      :variant="statusChip(v).variant ?? 'tonal'"
+                      >{{ statusChip(v).text }}</v-chip
+                    >
+                    <v-chip
+                      v-if="v.override !== null"
+                      size="x-small"
+                      variant="outlined"
+                      class="ml-1"
+                      >Override</v-chip
+                    >
+                  </td>
+                  <td class="text-right text-no-wrap">
+                    <template v-if="isProtected(v)">
+                      <v-btn
+                        v-if="v.activeJobId"
+                        v-tooltip:top="'Cancel'"
+                        icon="mdi-close"
+                        size="small"
+                        variant="text"
+                        :loading="busyKey === v.key"
+                        @click="cancel(v)"
+                      />
+                      <v-btn
+                        v-else
+                        v-tooltip:top="'Back up now'"
+                        icon="mdi-play"
+                        size="small"
+                        variant="text"
+                        :disabled="!configured"
+                        :loading="busyKey === v.key"
+                        @click="backUp(v)"
+                      />
+                    </template>
+                    <template v-if="v.status !== 'StaleCopy'">
+                      <v-btn
+                        v-tooltip:top="'Restore'"
+                        icon="mdi-backup-restore"
+                        size="small"
+                        variant="text"
+                        @click="restoreVolume = v"
+                      />
+                      <v-menu>
+                        <template #activator="{ props }">
+                          <v-btn
+                            v-bind="props"
+                            icon="mdi-dots-vertical"
+                            size="small"
+                            variant="text"
                           />
                         </template>
-                        <v-list-item title="Restore" @click="restoreVolume = v" />
-                        <v-list-item
-                          v-if="v.status !== 'Excluded'"
-                          title="Exclude"
-                          @click="setOverride(v, true)"
-                        />
-                        <v-list-item v-else title="Include" @click="setOverride(v, false)" />
-                        <v-list-item
-                          v-if="v.override !== null"
-                          title="Follow stack labels"
-                          @click="setOverride(v, null)"
-                        />
-                      </v-list>
-                    </v-menu>
+                        <v-list density="compact">
+                          <v-list-item
+                            v-if="v.status !== 'Excluded'"
+                            title="Exclude"
+                            @click="setOverride(v, true)"
+                          />
+                          <v-list-item v-else title="Include" @click="setOverride(v, false)" />
+                          <v-list-item
+                            v-if="v.override !== null"
+                            title="Follow stack labels"
+                            @click="setOverride(v, null)"
+                          />
+                        </v-list>
+                      </v-menu>
+                    </template>
                   </td>
                 </tr>
               </template>
               <tr v-if="!loading && groups.length === 0">
-                <td colspan="4" class="text-center text-medium-emphasis py-6">
+                <td colspan="6" class="text-center text-medium-emphasis py-6">
                   {{ attentionOnly ? 'Nothing needs attention.' : 'No volumes yet.' }}
                 </td>
               </tr>
@@ -387,15 +391,11 @@ function lastBackup(v: BackupVolumeDto): LastBackup {
 }
 
 .volumes {
-  min-width: 560px;
+  min-width: 880px;
 }
 
 .volume-cell {
   width: 100%;
   max-width: 0;
-}
-
-.actions-cell {
-  width: 48px;
 }
 </style>
